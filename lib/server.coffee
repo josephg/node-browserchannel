@@ -57,21 +57,28 @@ e0daf1a178fc0f58cd309308fba7e6f011ac38c9cdd4580760f1d4560a84d5ca0355ecbbed2ab715
 50640bd0e77acec90c58c4d3dd0f5cf8d4510e68c8b12e087bd88cad349aafd2ab16b07b0b1b8276091217a44a9fe
 92fedacffff48092ee693af\n"""
 
-# If the user is using IE, instead of using XHR the content is instead loaded into
+# If the user is using IE, instead of using XHR backchannel loaded using
 # a forever iframe. When data is sent, it is wrapped in <script></script> tags
 # which call functions in the browserchannel library.
 #
 # This method wraps the normal `.writeHead()`, `.write()` and `.end()` methods by
 # special versions which produce output based on the request's type.
+#
+# This **is not used** for:
+#
+# - The first channel test
+# - The first *bind* connection a client makes. The server sends arrays there, but the
+#   connection is a POST and it returns immediately. So that request happens using XHR/Trident
+#   like regular forward channel requests.
 messagingMethods = (type, res) ->
 	if type == 'html'
 		junkSent = false
 
 		writeHead: ->
-			res.writeHead 200, standardHeaders
+			res.writeHead 200, 'OK', standardHeaders
 			res.write '<html><body>'
 
-			domain = query['DOMAIN']
+			domain = query.DOMAIN
 			# If the iframe is making the request using a secondary domain, I think we need
 			# to set the domain to the original domain so that we can call the response methods.
 			if domain
@@ -103,16 +110,23 @@ messagingMethods = (type, res) ->
 			res.end "<script>try {parent.m(\"#{data}\")} catch(e){}</script>\n"
 
 	else
-		# For XHR requests, we just send data normally.
-		writeHead: -> res.writeHead 200, standardHeaders
+		# For normal XHR requests, we send data normally.
+		writeHead: -> res.writeHead 200, 'OK', standardHeaders
 		write: (data) -> res.write data
 		end: (data) -> res.end data
 		signalError: (statusCode, message) ->
 			res.writeHead statusCode, standardHeaders
 			res.end message
 
-# Forward connections POST data to the server using a series of url-encoded maps.
-# This method buffers the POST data from a request and decodes it into a JS object.
+# ## Parsing client maps from the forward channel
+#
+# The client sends data in a series of url-encoded maps. The data is encoded like this:
+# 
+# ```
+# count=2&ofs=0&req0_x=3&req0_y=10&req1_abc=def
+# ```
+#
+# First, we need to buffer up the request response and query string decode it.
 bufferPostData = (req, callback) ->
 	data = []
 	req.on 'data', (chunk) ->
@@ -121,11 +135,50 @@ bufferPostData = (req, callback) ->
 		data = data.join ''
 		callback querystring.parse data
 
+# Next, we'll need to decode the querystring-encoded maps into an array of objects.
+#
+# When this function is called, the data is in this form:
+#
+# ```
+# { count: '2',
+#   ofs: '0',
+#   req0_x: '3',
+#   req0_y: '10',
+#   req1_abc: 'def'
+# }
+# ```
+#
+# ... and we will return an object in the form of [{x:'3', y:'10'}, {abc: 'def'}]
+#
+# I really wish they'd just used JSON. I guess this lets you submit forward channel
+# data using just a GET request if you really want to. I wonder if thats how early
+# versions of browserchannel worked...
+decodeMaps = (data) ->
+	count = parseInt data.count
+	throw new Error 'Invalid maps' unless count == 0 or (count > 0 and data.ofs?)
+
+	maps = new Array count
+
+	# Scan through all the keys in the data. Every key of the form:
+	# `req123_xxx` will be used to populate its map.
+	regex = /^req(\d+)_(.+)$/
+	for key, val of data
+		match = regex.exec key
+		if match
+			id = match[1]
+			mapKey = match[2]
+			map = (maps[id] ||= {})
+			# The client uses `mapX_type=_badmap` to signify an error encoding a map.
+			continue if id == 'type' and mapKey == '_badmap'
+			map[mapKey] = val
+
+	maps
+
 # The server module returns a function, which you can call with your configuration
 # options. It returns your configured connect middleware, which is actually another function.
 module.exports = (options, onConnect) ->
-	if typeof client == 'undefined'
-		client = options
+	if typeof onConnect == 'undefined'
+		onConnect = options
 		options = {}
 
 	options ||= {}
@@ -137,10 +190,21 @@ module.exports = (options, onConnect) ->
 
 	clients = {}
 
-	# Get or create a client session based on client's `sessionId`. If the client is
-	# connecting for the first time, the sessionId is *undefined*. If a client is
-	# reconnecting an old connection, they set sessionId *null* and provide their previous
-	# sessionId and arrayId.
+	# Host prefixes provide a way to skirt around connection limits. They're only
+	# really important for old browsers.
+	getHostPrefix = ->
+		if options.hostPrefixes
+			randomArrayElement options.hostPrefixes
+		else
+			null
+
+	# # Create a new client session.
+	#
+	# This method will start a new client session. It is called in two different ways:
+	#
+	# - A new client is connecting for the first time
+	# - A client is reconnecting a dropped connection. In this case, the client provides
+	#   their previous *sessionId* and *arrayId*.
 	#
 	# Session ids are generated by [node-hat]. They are guaranteed to be unique.
 	# [node-hat]: https://github.com/substack/node-hat
@@ -150,45 +214,203 @@ module.exports = (options, onConnect) ->
 	# is open. If there's any connection turbulence, the client will reconnect and get
 	# a new session id.
 	#
-	# There are a bunch of different (interesting!) cases this function must handle:
-	#
-	# - **The sessionId is provided**
-	#   - If there is a session with that id, return it
-	#   - If there is no session id with that id, close the client's connection to force
-	#     them to try to reconnect. This could happen if the server is restarted and the
-	#     client doesn't notice.
-	#
-	# - **The sessionId is undefined**. This means a client is either connecting for
-	#   the first time or trying to reconnect an old session.
-	#   - If an old session id is *not* provided, we'll create and return a new client
-	#   - If an old session id is provided but we have no client with that id, we'll
-	#     create a new session for the client. (*Does the server tell the client that
-	#     the session is new somehow?*)
-	#   - If an old session id is provided and we have a client with that id, we'll
-	#     rename the client and return it.
-	createClient = (req, oldSessionId, oldArrayId) ->
+	# I'm not sure what should happen if there's an old *sessionId* that we still know about.
+	# Presumably, we rename the old session and pretend nothing happened... though I imagine
+	# its a bit more complicated than that. I'll have to read more of the code.
+	createClient = (address, appVersion, oldSessionId, oldArrayId) ->
 		if oldSessionId?
-			throw new Error 'Not implemented'
+			client = clients[oldSessionId]
+			if client?
+				# We create a new session id for the client and send any pending arrays
+				client.id = hat()
 
-		# Create a new client
+				client.emit 'reconnected'
+
+				# Resending arrays isn't implemented yet.
+				throw new Error 'Not implemented'
+
+				# We probably need to reset the client's rid and all sorts of nonsense.
+
+				return client
+
+			# Otherwise we'll just create a new client like normal. I'm not sure if
+			# we ever tell the client that we have no idea about its old sessionId.
+
+		# Create a new client. Clients extend node's [EventEmitter][] so they have access to
+		# goodies like `client.on(event, handler)`, `client.emit('paarty')`, etc.
+		# [EventEmitter]: http://nodejs.org/docs/v0.4.12/api/events.html
 		client = new EventEmitter
+
+		# The client's unique ID for this connection
 		client.id = hat()
+
+		# The client is a big ol' state machine. It has the following states:
+		#
+		# - **init**: The client has been created and its sessionId hasn't been sent yet.
+		#   The client moves to the **connected** state almost immediately.
+		#
+		# - **connected**: The client is sitting pretty and ready to send and receive data.
+		#   The client should spend most of its time in this state.
+		#
+		# - **stopped**: The client is invalid for some reason. The client stays in this
+		#   state just long enough to tell the client to stop connecting and tell the
+		#   application that the client is going to be destroyed. Then the client is becomes
+		#   **dead** and its removed from the session list.
+		#
+		# - **dead**: The client has been removed from the session list. It can no longer
+		#   be used for any reason.
+		#
+		#   It is invalid to send arrays to a client while it is stopped or dead. Unless you're
+		#   Bruce Willis...
 		client.state = 'init'
+
+		# The state is modified through this method. It emits events when the state changes.
+		# (yay)
 		client.changeState = (newState) ->
-			# I actually have no idea what this API should look like.
-			@emit 'change state', newState, @state
-			@emit newState
-		client.address = req.connection.remoteAddress
+			oldState = @state
+			@state = newState
+			@emit @state, oldState
+
+			if newState == 'stopped'
+				client.queueArray ['stop']
+
+		# The server sends messages to the client via a hanging GET request. Of course,
+		# the client has to be the one to open that request.
+		#
+		# This is a handle to that request.
+		client.setBackChannel = (res, query) ->
+			throw new Error 'Invalid backchannel headers' unless query.RID == 'rpc'
+
+			@backChannel = res
+			@backChannelMethods = messagingMethods query.TYPE, res
+			@chunk = query.CI == '0'
+
+			# If we haven't sent anything for 30 seconds, we'll send a little `['noop']` to the
+			# client to make sure we haven't forgotten it. (And to make sure the backchannel
+			# connection doesn't time out.)
+			#
+			# Its possible that a little bit of noise on the network connection (but not at the
+			# application level) will make this setTimeout not fire sometimes. Its not a big
+			# deal anyway - the client will just reopen it.
+			res.connection.setTimeout 30 * 1000, -> client.send ['noop']
+
+			# Send any arrays we've buffered now that we have a backchannel
+			client.flush()
+
+			res.connection.on 'close', ->
+				# Sad.
+				client.backChannel = client.backChannelMethods = null
+
+		client.refreshHeartbeat = ->
+
+		# The server sends data to the client by sending *arrays*. It seems a bit silly that
+		# client->server messages are maps and server->client messages are arrays, but there it is.
+		client.outgoingArrays = []
+
+		# `lastArrayId` is the array ID of the last queued array
+		client.lastArrayId = -1
+
+		# Every request from the client has an *AID* parameter which tells the server the ID
+		# of the last request the client has received. We won't remove arrays from the outgoingArrays
+		# list until the client has confirmed its received them.
+		#
+		# In `lastSentArrayId` we store the ID of the last array which we actually sent.
+		client.lastSentArrayId = -1
+
+		# The arrays get removed once they've been acknowledged
+		client.acknowledgedArrays = (id) ->
+			@outgoingArrays.shift() while @outgoingArrays.length > 0 and @outgoingArrays[0][0] <= id
+
+		# Queue an array to be sent
+		client.queueArray = (arr) ->
+			if client.state in ['dead', 'stopped']
+				throw new Error "Cannot queue array when state is #{@state}"
+
+			@outgoingArrays.push [++@lastArrayId, arr] # MOAR Arrays! The people demand it!
+
+		# Figure out how many unacknowledged arrays are hanging around in the client.
+		client.unacknowledgedArrays = ->
+			numUnsentArrays = client.lastArrayId - client.lastSentArrayId
+			client.outgoingArrays[... client.outgoingArrays - numUnsentArrays]
+
+		# The session has just been created. The first thing it needs to tell the client
+		# is its session id and host prefix and stuff.
+		client.queueArray ['c', client.id, getHostPrefix(), 8]
+
+		# ## Encoding server arrays for the back channel
+		#
+		# The server sends data to the client in **chunks**. Each chunk is a *JSON* array prefixed
+		# by its length in bytes.
+		#
+		# The array looks like this:
+		#
+		# ```
+		# [
+		#   [100, ['message', 'one']],
+		#   [101, ['message', 'two']],
+		#   [102, ['message', 'three']]
+		# ]
+		# ```
+		#
+		# Each individial message is prefixed by its *array id*, which is a counter starting at 0
+		# when the session is first created and incremented with each array.
+		client.sendTo = (channel, write) ->
+			numUnsentArrays = client.lastArrayId - client.lastSentArrayId
+			if numUnsentArrays > 0
+				arrays = client.outgoingArrays[client.outgoingArrays.length - numUnsentArrays ...]
+
+				json = JSON.stringify(arrays) + "\n"
+				# **Away!**
+				write "#{json.length}\n#{json}"
+
+				client.lastSentArrayId = client.lastArrayId
+
+			numUnsentArrays
+
+		# Queue the arrays to be sent on the next tick
+		client.flush = ->
+			process.nextTick ->
+				if client.backChannel
+					sentSomething = client.sendTo client.backChannel, client.backChannelMethods.write
+					client.backChannelMethods.end() if !client.chunk and sentSomething
+					
+		client.send = (arr) ->
+			@queueArray arr
+			@flush()
+
+		# The client's IP address when it first opened the session
+		client.address = address
+
+		# The client's reported application version, or null. This is sent when the
+		# connection is first requested, so you can use it to make your application die / stay
+		# compatible with people who don't close their browsers.
+		client.appVersion = appVersion if appVersion?
+
+		# Stop the client's connections and make it die. This will send the special
+		# 'stop' signal to the client, which will cause it to stop trying to reconnect.
+		client.stop = ->
+			@changeState 'stop'
+			@close()
+
+		# This closes a client's connections and makes the server forget about it.
+		# The client will probably try and reconnect if you simply close its connections.
+		# It'll get a new client object when it does so.
+		client.close = ->
+			# ... close all connections and stuff.
+
+		# Send the client array data through the backchannel
+		client.sendArray = (data) ->
+
+		# Remind everybody that the client is still alive and ticking. If the client
+		# doesn't see any traffic for awhile, it'll get deleted and the browser will just have
+		# to reconnect.
+		client.touch = ->
 
 		clients[client.id] = client
 
 		console.log "Created a new client #{client.id} from #{client.address}"
 
 		client
-
-	# ????
-	getClient = (sessionId) ->
-		clients[sessionId] # Return undefined if there is no session id.
 
 	# This is the returned middleware. Connect middleware is a function which
 	# takes in an http request, an http response and a next method.
@@ -202,11 +424,11 @@ module.exports = (options, onConnect) ->
 		{query, pathname} = parse req.url, true
 		return next() if pathname.substring(0, base.length) != base
 
-		{writeHead, write, end, signalError} = messagingMethods query['TYPE'], res
+		{writeHead, write, end, signalError} = messagingMethods query.TYPE, res
 
 		# This server only supports browserchannel protocol version **8**.
-		if query['VER'] != '8'
-			signalError 400, 'Only browserchannel version 8 is supported' # Is 400 appropriate here?
+		if query.VER != '8'
+			signalError 400, 'Only version 8 is supported' # Is 400 appropriate here?
 			return
 
 		# # Connection testing
@@ -224,19 +446,15 @@ module.exports = (options, onConnect) ->
 			# This gets around browser connection limits. Using this requires a bank of
 			# configured DNS entries and SSL certificates if you're using HTTPS.
 			#
-			# - **blockedprefix** provides network admins a way to blacklist browserchannel requests.
-			# It is not supported by node-browserchannel.
-			if query['MODE'] == 'init' and req.method == 'GET'
-				hostPrefix = if options.hostPrefixes
-					randomArrayElement options.hostPrefixes
-				else
-					null
-
+			# - **blockedprefix** provides network admins a way to blacklist browserchannel
+			# requests. It is not supported by node-browserchannel.
+			if query.MODE == 'init' and req.method == 'GET'
+				hostPrefix = getHostPrefix()
 				blockedPrefix = null # Blocked prefixes aren't supported.
 
 				# This is a straight-up normal HTTP request like the forward channel requests.
 				# We don't use the funny iframe write methods.
-				res.writeHead 200, standardHeaders
+				res.writeHead 200, 'OK', standardHeaders
 				res.end(JSON.stringify [hostPrefix, blockedPrefix])
 
 			else
@@ -262,74 +480,65 @@ module.exports = (options, onConnect) ->
 		#   hanging **GET** request. If chunking is disallowed (ie, if the proxy buffers)
 		#   then the back channel is closed after each server message.
 		else if pathname == "#{base}/bind"
+			# All browserchannel connections have an associated client object. A client
+			# is created immediately if the connection is new.
+			if query.SID
+				client = clients[query.SID]
+				unless client?
+					# This is a special error code for the client. It tells the client to abandon its
+					# connection request and reconnect.
+					signalError '400', 'Unknown SID'
+
 			#### Forward Channel
 			if req.method == 'POST'
-				# The client sends data in a series of url-encoded maps. The data is encoded like this:
-				# 
-				# ```
-				# count=2&ofs=0&req0_x=3&req0_y=10&req1_abc=def
-				# ```
-				#
-				# First, we need to buffer up the request response and query string decode it.
+				if client == undefined
+					# The client is new! Make them a new client object and let the
+					# application know.
+					client = createClient(req.connection.remoteAddress, query.CVER, query.OSID, query.OAID)
+					onConnect? client
+					init = true
+
+				client.acknowledgedArrays query.AID if query.AID?
+
 				bufferPostData req, (data) ->
-					# Now the data is in the form of:
-					#
-					# ```
-					# { count: '2',
-					#   ofs: '0',
-					#   req0_x: '3',
-					#   req0_y: '10',
-					#   req1_abc: 'def'
-					# }
-					# ```
-					count = parseInt data.count
-					unless count == 0 or (count > 0 and data.ofs?)
-						signalError 400, 'Invalid maps'
-						return
+					maps = decodeMaps data
+					client.emit 'map', map for map in maps unless client.state == 'stop'
 
-					maps = new Array count
+					res.writeHead 200, 'OK', standardHeaders
+					# On the initial request, we send any pending server arrays to the client.
+					# This is important because it tells the client what its session id is.
+					if init
+						client.sendTo res, write
+						res.end()
+					else
+						# On normal forward channels, we reply to the request by telling the client
+						# if our backchannel is still live and telling it how many unconfirmed
+						# arrays we have.
+						unacknowledgedArrays = client.unacknowledgedArrays()
+						outstandingBytes = if unacknowledgedArrays.length == 0
+							0
+						else
+							JSON.stringify(unacknowledgedArrays).length
 
-					# Scan through all the keys in the data. Every key of the form:
-					# `req123_xxx` will be used to populate its map.
-					regex = /^req(\d+)_(.+)$/
-					for key, val of data
-						match = regex.exec key
-						if match
-							id = match[1]
-							mapKey = match[2]
-							map = (maps[id] ||= {})
-							# The client uses `mapX_type=_badmap` to signify an error encoding a map.
-							continue if id == 'type' and mapKey == '_badmap'
-							map[mapKey] = val
-
-					console.log 'maps:', maps
-
-					res.writeHead 200, standardHeaders
-
-					client = createClient(req)
-					responseArrays = [
-						['c', client.id, null, 8]
-					]
-
-					arrayId = 0
-					arrays = ([arrayId++, d] for d in responseArrays)
-					json = JSON.stringify arrays
-					res.end "#{json.length}\n#{json}"
+						response = JSON.stringify [client.backChannel?, client.lastSentArrayId, outstandingBytes]
+						end "#{response.length}\n#{response}"
 
 			#### Back Channel
 			else if req.method == 'GET'
-				console.log 'Back channel:', query
-				signalError 404, 'Not found'
-			
+				throw new Error 'invalid SID' if typeof query.SID != 'string' && query.SID.length < 5
+				throw new Error 'Session not specified' unless client?
+				#console.log 'Back channel:', query
+				writeHead()
+				client.setBackChannel res, query
 
 			else
-				res.writeHead 405, standardHeaders
+				res.writeHead 405, 'Method Not Allowed', standardHeaders
 				res.end "Method not allowed"
 				
 
 		else
 			# We'll 404 the user instead of letting another handler take care of it.
 			# Users shouldn't be using the specified URL prefix for anything else.
-			res.writeHead 404, standardHeaders
+			res.writeHead 404, 'Not Found', standardHeaders
 			res.end "Not found"
 
