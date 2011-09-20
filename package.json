@@ -13,7 +13,8 @@
     "node": "~0.4"
   },
   "dependencies": {
-    "coffee-script": "~1"
+    "coffee-script": "~1",
+    "hat": "*"
   },
   "devDependencies": {}
 }
