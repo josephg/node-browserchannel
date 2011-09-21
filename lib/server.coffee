@@ -1,17 +1,22 @@
-# This is a browserchannel server.
+# This is a BrowserChannel server.
 #
-# - It doesn't work yet.
+# - Its brand new, and it barely works
 # - It is missing tests
+# - API will change
 #
 # The server is implemented as connect middleware.
 
 # `parse` helps us decode URLs in requests
 {parse} = require 'url'
-{EventEmitter} = require 'events'
+# `querystring` will help decode the URL-encoded forward channel data
 querystring = require 'querystring'
+
+# Client sessions are `EventEmitters
+{EventEmitter} = require 'events'
+# Client session Ids are generated using `node-hat`
 hat = require('hat').rack(40, 36)
 
-# `randomInt(k)` generates and returns a random int smaller than *n* (0 <= k < n)
+# `randomInt(n)` generates and returns a random int smaller than n (0 <= k < n)
 randomInt = (n) -> Math.floor(Math.random() * n)
 
 # `randomArrayElement(array)` Selects and returns a random element from *array*
@@ -34,6 +39,11 @@ defaultOptions =
 	# else, or whatever.
 	base: '/channel'
 
+	# We'll send keepalives every so often to make sure the http connection isn't closed by
+	# eagar clients. The standard timeout is 30 seconds, so we'll default to sending them
+	# every 20 seconds or so.
+	keepAliveInterval: 20 * 1000
+
 # All server responses set some standard HTTP headers.
 # To be honest, I don't know how many of these are necessary. I just copied
 # them from google.
@@ -46,6 +56,11 @@ standardHeaders =
 	'Pragma': 'no-cache'
 	'Expires': 'Fri, 01 Jan 1990 00:00:00 GMT'
 	'X-Content-Type-Options': 'nosniff'
+
+# The one exception to that is requests destined for iframes. They need to
+# have content-type: text/html set for IE to process the juicy JS inside.
+ieHeaders = Object.create standardHeaders
+ieHeaders['Content-Type'] = 'text/html'
 
 # Google's browserchannel server adds some junk after the first message data is sent. I
 # assume this stops some whole-page buffering in IE. I assume the data used is noise so it
@@ -70,44 +85,45 @@ e0daf1a178fc0f58cd309308fba7e6f011ac38c9cdd4580760f1d4560a84d5ca0355ecbbed2ab715
 # - The first *bind* connection a client makes. The server sends arrays there, but the
 #   connection is a POST and it returns immediately. So that request happens using XHR/Trident
 #   like regular forward channel requests.
-messagingMethods = (type, res) ->
+messagingMethods = (query, res) ->
+	type = query.TYPE
 	if type == 'html'
 		junkSent = false
 
-		writeHead: ->
-			res.writeHead 200, 'OK', standardHeaders
-			res.write '<html><body>'
+		methods =
+			writeHead: ->
+				res.writeHead 200, 'OK', ieHeaders
+				res.write '<html><body>'
 
-			domain = query.DOMAIN
-			# If the iframe is making the request using a secondary domain, I think we need
-			# to set the domain to the original domain so that we can call the response methods.
-			if domain
-				# Make sure the domain doesn't contain anything by naughty by `JSON.stringify()`-ing
-				# it before passing it to the client. There are XSS vulnerabilities otherwise.
-				domain = JSON.stringify domain
-				res.write "<script>try{document.domain=#{domain};}catch(e){}</script>\n"
-	
-		write: (data) ->
-			# The data is passed to `m()`, which is bound to *onTridentRpcMessage_* in the client.
-			res.write "<script>try {parent.m(\"#{data}\")} catch(e){}</script>\n"
-			unless junkSent
-				res.write ieJunk
-				junkSent = true
+				domain = query.DOMAIN
+				# If the iframe is making the request using a secondary domain, I think we need
+				# to set the `domain` to the original domain so that we can call the response methods.
+				if domain and domain != ''
+					# Make sure the domain doesn't contain anything by naughty by `JSON.stringify()`-ing
+					# it before passing it to the client. There are XSS vulnerabilities otherwise.
+					res.write "<script>try{document.domain=#{JSON.stringify domain};}catch(e){}</script>\n"
+		
+			write: (data) ->
+				# The data is passed to `m()`, which is bound to *onTridentRpcMessage_* in the client.
+				res.write "<script>try {parent.m(#{JSON.stringify data})} catch(e){}</script>\n"
+				unless junkSent
+					res.write ieJunk
+					junkSent = true
 
-		end: (data) ->
-			write data if data
+			end: (data) ->
+				methods.write data if data
 
-			# Once the data has been received, the client needs to call `d()`, which is bound to
-			# *onTridentDone_* with success=*true*.
-			res.end "<script>try {parent.d()} catch(e){}</script>\n"
+				# Once the data has been received, the client needs to call `d()`, which is bound to
+				# *onTridentDone_* with success=*true*.
+				res.end "<script>try {parent.d()} catch(e){}</script>\n"
 
-		# This is a helper method for signalling an error in the request back to the client.
-		signalError: ->
-			# The HTML (iframe) handler has no way to discover that the embedded script tag
-			# didn't complete successfully. To signal errors, we return **200 OK** and call an
-			# exposed rpcClose() method on the page.
-			writeHead()
-			res.end "<script>try {parent.m(\"#{data}\")} catch(e){}</script>\n"
+			# This is a helper method for signalling an error in the request back to the client.
+			signalError: (statusCode, message) ->
+				# The HTML (iframe) handler has no way to discover that the embedded script tag
+				# didn't complete successfully. To signal errors, we return **200 OK** and call an
+				# exposed rpcClose() method on the page.
+				methods.writeHead()
+				res.end "<script>try {parent.rpcClose(#{JSON.stringify message})} catch(e){}</script>\n"
 
 	else
 		# For normal XHR requests, we send data normally.
@@ -148,7 +164,7 @@ bufferPostData = (req, callback) ->
 # }
 # ```
 #
-# ... and we will return an object in the form of [{x:'3', y:'10'}, {abc: 'def'}]
+# ... and we will return an object in the form of `[{x:'3', y:'10'}, {abc: 'def'}]`
 #
 # I really wish they'd just used JSON. I guess this lets you submit forward channel
 # data using just a GET request if you really want to. I wonder if thats how early
@@ -281,8 +297,11 @@ module.exports = (options, onConnect) ->
 		client.setBackChannel = (res, query) ->
 			throw new Error 'Invalid backchannel headers' unless query.RID == 'rpc'
 
+			if @backChannel
+				@backChannelMethods.end()
+
 			@backChannel = res
-			@backChannelMethods = messagingMethods query.TYPE, res
+			@backChannelMethods = messagingMethods query, res
 			@chunk = query.CI == '0'
 
 			# If we haven't sent anything for 30 seconds, we'll send a little `['noop']` to the
@@ -292,7 +311,7 @@ module.exports = (options, onConnect) ->
 			# Its possible that a little bit of noise on the network connection (but not at the
 			# application level) will make this setTimeout not fire sometimes. Its not a big
 			# deal anyway - the client will just reopen it.
-			res.connection.setTimeout 30 * 1000, -> client.send ['noop']
+			res.connection.setTimeout options.keepAliveInterval, -> client.send ['noop']
 
 			# Send any arrays we've buffered now that we have a backchannel
 			client.flush()
@@ -354,7 +373,7 @@ module.exports = (options, onConnect) ->
 		#
 		# Each individial message is prefixed by its *array id*, which is a counter starting at 0
 		# when the session is first created and incremented with each array.
-		client.sendTo = (channel, write) ->
+		client.sendTo = (write) ->
 			numUnsentArrays = client.lastArrayId - client.lastSentArrayId
 			if numUnsentArrays > 0
 				arrays = client.outgoingArrays[client.outgoingArrays.length - numUnsentArrays ...]
@@ -371,7 +390,7 @@ module.exports = (options, onConnect) ->
 		client.flush = ->
 			process.nextTick ->
 				if client.backChannel
-					sentSomething = client.sendTo client.backChannel, client.backChannelMethods.write
+					sentSomething = client.sendTo client.backChannelMethods.write
 					client.backChannelMethods.end() if !client.chunk and sentSomething
 					
 		client.send = (arr) ->
@@ -424,7 +443,7 @@ module.exports = (options, onConnect) ->
 		{query, pathname} = parse req.url, true
 		return next() if pathname.substring(0, base.length) != base
 
-		{writeHead, write, end, signalError} = messagingMethods query.TYPE, res
+		{writeHead, write, end, signalError} = messagingMethods query, res
 
 		# This server only supports browserchannel protocol version **8**.
 		if query.VER != '8'
@@ -487,7 +506,8 @@ module.exports = (options, onConnect) ->
 				unless client?
 					# This is a special error code for the client. It tells the client to abandon its
 					# connection request and reconnect.
-					signalError '400', 'Unknown SID'
+					signalError '400', '"Error: Unknown SID"'
+					return
 
 			#### Forward Channel
 			if req.method == 'POST'
@@ -504,11 +524,12 @@ module.exports = (options, onConnect) ->
 					maps = decodeMaps data
 					client.emit 'map', map for map in maps unless client.state == 'stop'
 
+					console.log 'writeHead'
 					res.writeHead 200, 'OK', standardHeaders
 					# On the initial request, we send any pending server arrays to the client.
 					# This is important because it tells the client what its session id is.
 					if init
-						client.sendTo res, write
+						client.sendTo (data) -> res.write(data)
 						res.end()
 					else
 						# On normal forward channels, we reply to the request by telling the client
@@ -521,7 +542,7 @@ module.exports = (options, onConnect) ->
 							JSON.stringify(unacknowledgedArrays).length
 
 						response = JSON.stringify [client.backChannel?, client.lastSentArrayId, outstandingBytes]
-						end "#{response.length}\n#{response}"
+						res.end "#{response.length}\n#{response}"
 
 			#### Back Channel
 			else if req.method == 'GET'

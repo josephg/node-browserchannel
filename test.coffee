@@ -17,6 +17,8 @@ server = connect(
 		
 		client.send ['hi']
 
+		setInterval (-> client.send ['yo dawg']), 3000
+
 		client.on 'reconnected', (oldSessionId) ->
 			console.log 'client reconnected'
 		
