@@ -1,6 +1,6 @@
 > This is a work in progress. It does not work yet.
 
-This is an implementation of google's (BrowserChannel)[http://closure-library.googlecode.com/svn/trunk/closure/goog/net/browserchannel.js] protocol for communicating with a browser.
+This is an implementation of google's [BrowserChannel](http://closure-library.googlecode.com/svn/trunk/closure/goog/net/browserchannel.js) protocol for communicating with a browser.
 
 BrowserChannel is google's version of [socket.io](http://socket.io) from when they first put chat in gmail. Unlike socket.io, browserchannel provides much better guarantees about message delivery and state. It has much better reconnection logic and error handling. Ie, you know whats going on. In exchange, its also slightly slower, it doesn't work cross-domain and it doesn't use websockets.
 
