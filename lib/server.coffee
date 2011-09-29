@@ -128,7 +128,7 @@ messagingMethods = (query, res) ->
 	else
 		# For normal XHR requests, we send data normally.
 		writeHead: -> res.writeHead 200, 'OK', standardHeaders
-		write: (data) -> res.write data
+		write: (data) -> res.write "#{data.length}\n#{data}"
 		end: (data) -> res.end data
 		signalError: (statusCode, message) ->
 			res.writeHead statusCode, standardHeaders
@@ -203,6 +203,9 @@ module.exports = (options, onConnect) ->
 	# Strip off a trailing slash in base.
 	base = options.base
 	base = base[... base.length - 1] if base.match /\/$/
+	
+	# Add a leading slash back on base
+	base = "/#{base}" unless base.match /^\//
 
 	clients = {}
 
@@ -378,9 +381,8 @@ module.exports = (options, onConnect) ->
 			if numUnsentArrays > 0
 				arrays = client.outgoingArrays[client.outgoingArrays.length - numUnsentArrays ...]
 
-				json = JSON.stringify(arrays) + "\n"
 				# **Away!**
-				write "#{json.length}\n#{json}"
+				write JSON.stringify(arrays) + "\n"
 
 				client.lastSentArrayId = client.lastArrayId
 
@@ -445,11 +447,6 @@ module.exports = (options, onConnect) ->
 
 		{writeHead, write, end, signalError} = messagingMethods query, res
 
-		# This server only supports browserchannel protocol version **8**.
-		if query.VER != '8'
-			signalError 400, 'Only version 8 is supported' # Is 400 appropriate here?
-			return
-
 		# # Connection testing
 		#
 		# Before the browserchannel client connects, it tests the connection to make
@@ -457,6 +454,10 @@ module.exports = (options, onConnect) ->
 		#
 		# The server-side code for connection testing is completely stateless.
 		if pathname == "#{base}/test"
+			# This server only supports browserchannel protocol version **8**.
+			# I have no idea if 400 is the right error here.
+			return signalError 400, 'Only version 8 is supported' unless query.VER is '8'
+
 			#### Phase 1: Server info
 			# The client is requests host prefixes. The server responds with an array of
 			# ['hostprefix' or null, 'blockedprefix' or null].
@@ -499,6 +500,8 @@ module.exports = (options, onConnect) ->
 		#   hanging **GET** request. If chunking is disallowed (ie, if the proxy buffers)
 		#   then the back channel is closed after each server message.
 		else if pathname == "#{base}/bind"
+			return signalError 400, 'Only version 8 is supported' unless query.VER is '8'
+
 			# All browserchannel connections have an associated client object. A client
 			# is created immediately if the connection is new.
 			if query.SID
