@@ -14,7 +14,8 @@
   },
   "dependencies": {
     "coffee-script": "~1",
-    "hat": "*"
+    "hat": "*",
+    "timerstub": "*"
   },
   "devDependencies": {}
 }

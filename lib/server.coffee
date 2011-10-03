@@ -22,6 +22,12 @@ randomInt = (n) -> Math.floor(Math.random() * n)
 # `randomArrayElement(array)` Selects and returns a random element from *array*
 randomArrayElement = (array) -> array[randomInt(array.length)]
 
+# For testing we'll override `setInterval`, etc with special testing stub versions (so
+# we don't have to actually wait for actual *time*. To do that, we need local variable
+# versions (I don't want to edit the global versions). ... and they'll just point to the
+# normal versions anyway.
+{setInterval, clearInterval, setTimeout, clearTimeout, Date} = global
+
 # The module is configurable
 defaultOptions =
 	# An optional array of host prefixes. Each browserchannel client will randomly pick
@@ -67,10 +73,10 @@ ieHeaders['Content-Type'] = 'text/html'
 # doesn't compress.
 #
 # I don't really know why google does this. I'm assuming there's a good reason to it though.
-ieJunk = """7cca69475363026330a0d99468e88d23ce95e222591126443015f5f462d9a177186c8701fb45a6ffe
-e0daf1a178fc0f58cd309308fba7e6f011ac38c9cdd4580760f1d4560a84d5ca0355ecbbed2ab715a3350fe0c4790
-50640bd0e77acec90c58c4d3dd0f5cf8d4510e68c8b12e087bd88cad349aafd2ab16b07b0b1b8276091217a44a9fe
-92fedacffff48092ee693af\n"""
+ieJunk = "7cca69475363026330a0d99468e88d23ce95e222591126443015f5f462d9a177186c8701fb45a6ffe
+e0daf1a178fc0f58cd309308fba7e6f011ac38c9cdd4580760f1d4560a84d5ca0355ecbbed2ab715a3350fe0c47
+9050640bd0e77acec90c58c4d3dd0f5cf8d4510e68c8b12e087bd88cad349aafd2ab16b07b0b1b8276091217a44
+a9fe92fedacffff48092ee693af\n"
 
 # If the user is using IE, instead of using XHR backchannel loaded using
 # a forever iframe. When data is sent, it is wrapped in <script></script> tags
@@ -105,17 +111,16 @@ messagingMethods = (query, res) ->
 		
 			write: (data) ->
 				# The data is passed to `m()`, which is bound to *onTridentRpcMessage_* in the client.
-				res.write "<script>try {parent.m(#{JSON.stringify data})} catch(e){}</script>\n"
+				res.write "<script>try {parent.m(#{JSON.stringify data})} catch(e) {}</script>\n"
 				unless junkSent
 					res.write ieJunk
 					junkSent = true
 
-			end: (data) ->
-				methods.write data if data
-
+			end: ->
 				# Once the data has been received, the client needs to call `d()`, which is bound to
 				# *onTridentDone_* with success=*true*.
-				res.end "<script>try {parent.d()} catch(e){}</script>\n"
+				# The weird spacing of this is copied from browserchannel. Its really not necessary.
+				res.end "<script>try  {parent.d(); }catch (e){}</script>\n"
 
 			# This is a helper method for signalling an error in the request back to the client.
 			signalError: (statusCode, message) ->
@@ -125,11 +130,19 @@ messagingMethods = (query, res) ->
 				methods.writeHead()
 				res.end "<script>try {parent.rpcClose(#{JSON.stringify message})} catch(e){}</script>\n"
 
+		# For some reason, sending data during the second test (111112) works slightly differently for
+		# XHR, but its identical for html encoding. We'll use a writeRaw() method in that case, which
+		# is copied in the case of html.
+		methods.writeRaw = methods.write
+
+		methods
+
 	else
 		# For normal XHR requests, we send data normally.
 		writeHead: -> res.writeHead 200, 'OK', standardHeaders
 		write: (data) -> res.write "#{data.length}\n#{data}"
-		end: (data) -> res.end data
+		writeRaw: (data) -> res.write data
+		end: -> res.end()
 		signalError: (statusCode, message) ->
 			res.writeHead statusCode, standardHeaders
 			res.end message
@@ -192,7 +205,7 @@ decodeMaps = (data) ->
 
 # The server module returns a function, which you can call with your configuration
 # options. It returns your configured connect middleware, which is actually another function.
-module.exports = (options, onConnect) ->
+module.exports = browserChannel = (options, onConnect) ->
 	if typeof onConnect == 'undefined'
 		onConnect = options
 		options = {}
@@ -445,7 +458,7 @@ module.exports = (options, onConnect) ->
 		{query, pathname} = parse req.url, true
 		return next() if pathname.substring(0, base.length) != base
 
-		{writeHead, write, end, signalError} = messagingMethods query, res
+		{writeHead, write, writeRaw, end, signalError} = messagingMethods query, res
 
 		# # Connection testing
 		#
@@ -485,8 +498,8 @@ module.exports = (options, onConnect) ->
 				# The client should get the data in 2 chunks - but they won't if there's a misbehaving
 				# corporate proxy in the way or something.
 				writeHead()
-				write '11111'
-				setTimeout (-> end '2'), 2000
+				writeRaw '11111'
+				setTimeout (-> writeRaw '2'; end()), 2000
 
 		# # BrowserChannel connection
 		#
@@ -566,3 +579,7 @@ module.exports = (options, onConnect) ->
 			res.writeHead 404, 'Not Found', standardHeaders
 			res.end "Not found"
 
+# This will override the timer methods (`setInterval`, etc) with the testing stub versions,
+# which are way faster.
+browserChannel._setTimerMethods = (methods) ->
+    {setInterval, clearInterval, setTimeout, clearTimeout, Date} = methods

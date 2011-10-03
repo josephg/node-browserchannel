@@ -32,6 +32,10 @@ http = require 'http'
 assert = require 'assert'
 querystring = require 'querystring'
 
+timer = require 'timerstub'
+
+browserChannel._setTimerMethods timer
+
 # Wait for the function to be called a given number of times, then call the callback.
 #
 # This useful little method has been stolen from ShareJS
@@ -46,6 +50,12 @@ expectCalls = (n, callback) ->
 		else if remaining < 0
 			throw new Error "expectCalls called more than #{n} times"
 
+# This returns a function that calls test.done() after it has been called n times. Its
+# useful when you want a bunch of mini tests inside one test case.
+exports.makePassPart = (test, n) ->
+	expectCalls n, -> test.done()
+
+
 # Most of these tests will make HTTP requests. A lot of the time, we don't care about the
 # timing of the response, we just want to know what it was. This method will buffer the
 # response data from an http response object and when the whole response has been received,
@@ -55,6 +65,37 @@ buffer = (res, callback) ->
 	res.on 'data', (chunk) ->
 		data.push chunk.toString 'utf8'
 	res.on 'end', -> callback data.join ''
+
+# For some tests we expect certain data, delivered in chunks. Wait until we've
+# received at least that much data and strcmp. The response will probably be used more,
+# afterwards, so we'll make sure the listener is removed after we're done.
+expect = (res, str, callback) ->
+	data = ''
+	res.on 'end', endlistener = ->
+		# This should fail - if the data was as long as str, we would have compared them
+		# already. Its important that we get an error message if the http connection ends
+		# before the string has been received.
+		console.warn 'Connection ended prematurely'
+		assert.strictEqual data, str
+
+	res.on 'data', listener = (chunk) ->
+		# I'm using string += here because the code is easier that way.
+		data += chunk.toString 'utf8'
+		#console.warn JSON.stringify data
+		#console.warn JSON.stringify str
+		if data.length >= str.length
+			assert.strictEqual data, str
+			res.removeListener 'data', listener
+			res.removeListener 'end', endlistener
+			callback()
+
+# Copied from google's implementation. The contents of this aren't actually relevant,
+# but I think its important that its pseudo-random so if the connection is compressed,
+# it still recieves a bunch of bytes after the first message.
+ieJunk = "7cca69475363026330a0d99468e88d23ce95e222591126443015f5f462d9a177186c8701fb45a6ffe
+e0daf1a178fc0f58cd309308fba7e6f011ac38c9cdd4580760f1d4560a84d5ca0355ecbbed2ab715a3350fe0c47
+9050640bd0e77acec90c58c4d3dd0f5cf8d4510e68c8b12e087bd88cad349aafd2ab16b07b0b1b8276091217a44
+a9fe92fedacffff48092ee693af\n"
 
 # Most tests will just use the default configuration of browserchannel, but obviously
 # some tests will need to customise the options. To customise the options we'll need
@@ -123,8 +164,6 @@ module.exports = testCase
 	
 	# # Testing channel tests
 	#
-	# ### Server options
-	#
 	# The first thing a client does when it connects is issue a GET on /test/?mode=INIT.
 	# The server responds with an array of [basePrefix or null,blockedPrefix or null]. Blocked
 	# prefix isn't supported by node-browerchannel and by default no basePrefix is set. So with no
@@ -150,18 +189,6 @@ module.exports = testCase
 					# dependant on it, but I can't be bothered.
 					server.close()
 					test.done()
-	
-	# node-browserchannel is only compatible with browserchannel client v8. I don't know whats changed
-	# since old versions (maybe v6 would be easy to support) but I don't care. If the client specifies
-	# an old version, we'll die with an error.
-	'GET /test/?mode=INIT without VER=8 returns an error': (test) ->
-		http.get {path:'/channel/test?VER=7&MODE=init', host: 'localhost', port: @port}, (response) ->
-			test.strictEqual response.statusCode, 400
-			test.done()
-	
-	# I'm not really sure what should happen if the version isn't specified at all. Its not really important
-	# I guess... the server could either ditch the client, or it could just assume the most recent version.
-	# I'm not sure what google's implementation does.
 
 	# Setting a custom url endpoint to bind node-browserchannel to should make it respond at that url endpoint
 	# only.
@@ -188,7 +215,7 @@ module.exports = testCase
 	# Its tempting to think that you need a trailing slash on your URL prefix as well. You don't, but that should
 	# work too.
 	'binding the server to a custom url with a trailing slash works': (test) ->
-		# Some day, the copy+paste police are gonna get me. I don't feel so bad doing it for tests though, because
+		# Some day, the copy+paste police are gonna get me. I don't feel *so* bad doing it for tests though, because
 		# it helps readability.
 		createServer base:'foozit/', (->), (server, port) ->
 			http.get {path:'/foozit/test?VER=8&MODE=init', host: 'localhost', port: port}, (response) ->
@@ -221,8 +248,75 @@ module.exports = testCase
 			test.strictEqual response.statusCode, 404
 			test.done()
 
+	# ## Testing phase 2
+	#
+	# I should really sort the above tests better.
+	# 
+	# Testing phase 2 the client GETs /channel/test?VER=8&TYPE= [html / xmlhttp] &zx=558cz3evkwuu&t=1 [&DOMAIN=xxxx]
+	#
+	# The server sends '11111' <2 second break> '2'. If you use html encoding instead, the server sends the client
+	# a webpage which calls:
+	#
+	#     document.domain='mail.google.com';
+	#     parent.m('11111');
+	#     parent.m('2');
+	#     parent.d();
+	'Getting test phase 2 returns 11111 then 2': do ->
+		makeTest = (type, message1, message2) -> (test) ->
+			http.get {path:"/channel/test?VER=8&TYPE=#{type}", host: 'localhost', port: @port}, (response) ->
+				test.strictEqual response.statusCode, 200
+				expect response, message1, ->
+					# Its important to make sure that message 2 isn't sent too soon (<2 seconds).
+					# We'll advance the server's clock forward by just under 2 seconds and then wait a little bit
+					# for messages from the client. If we get a message during this time, throw an error.
+					response.on 'data', f = -> throw new Error 'should not get more data so early'
+					timer.wait 1999, ->
+						# This is the real `setTimeout` method here. We'll wait 50 milliseconds, which should be way
+						# more than enough to get a response from a local server, if its going to give us one.
+						setTimeout ->
+								response.removeListener 'data', f
+								timer.wait 1, ->
+									expect response, message2, ->
+										response.once 'end', -> test.done()
+							, 50
+
+		'xmlhttp': makeTest 'xmlhttp', '11111', '2'
+
+		# I could write this test using JSDom or something like that, and parse out the HTML correctly.
+		# ... but it would be way more complicated (and no more correct) than simply comparing the resulting
+		# strings.
+		'html': makeTest('html',
+			# These HTML responses are identical to what I'm getting from google's servers. I think the seemingly
+			# random sequence is just so network framing doesn't try and chunk up the first packet sent to the server
+			# or something like that.
+			"""<html><body><script>try {parent.m("11111")} catch(e) {}</script>\n#{ieJunk}""",
+			'''<script>try {parent.m("2")} catch(e) {}</script>
+<script>try  {parent.d(); }catch (e){}</script>\n''')
 	
-		
+	# node-browserchannel is only compatible with browserchannel client v8. I don't know whats changed
+	# since old versions (maybe v6 would be easy to support) but I don't care. If the client specifies
+	# an old version, we'll die with an error.
+	# The alternate phase 2 URL style should have the same behaviour if the version is old or unspecified.
+	#
+	# Google's browserchannel server still works if you miss out on specifying the version - it defaults
+	# to version 1 (which maybe didn't have version numbers in the URLs). I'm kind of impressed that
+	# all that code still works.
+	'Getting /test/* without VER=8 returns an error': do ->
+		# All these tests look 95% the same. Instead of writing the same test all those times, I'll use this
+		# little helper method to generate them.
+		check400 = (path) -> (test) ->
+			http.get {path, host: 'localhost', port: @port}, (response) ->
+				test.strictEqual response.statusCode, 400
+				test.done()
+
+		'phase 1, ver 7': check400 '/channel/test?VER=7&MODE=init'
+		'phase 1, no version': check400 '/channel/test?MODE=init'
+		'phase 2, ver 7, xmlhttp': check400 '/channel/test?VER=7&TYPE=xmlhttp'
+		'phase 2, no version, xmlhttp': check400 '/channel/test?TYPE=xmlhttp'
+		# For HTTP connections (IE), the error is sent a different way. Its kinda complicated how the error
+		# is sent back, so for now I'm just going to ignore checking it.
+		#`'phase 2, ver 7, http': check400 '/channel/test?VER=7&TYPE=html'`
+		#`'phase 2, no version, http': check400 '/channel/test?TYPE=html'`
 	# # Tests to write
 	#
 	# I need to write the following tests:
