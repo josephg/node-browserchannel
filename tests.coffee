@@ -292,6 +292,17 @@ module.exports = testCase
 			"""<html><body><script>try {parent.m("11111")} catch(e) {}</script>\n#{ieJunk}""",
 			'''<script>try {parent.m("2")} catch(e) {}</script>
 <script>try  {parent.d(); }catch (e){}</script>\n''')
+
+		# If a client is connecting with a host prefix, the server sets the iframe's document.domain to match
+		# before sending actual data.
+		'html with a host prefix': makeTest('html&DOMAIN=foo.bar.com',
+			# I've made a small change from google's implementation here. I'm using double quotes `"` instead of
+			# single quotes `'` because its easier to encode. (I can't just wrap the string in quotes because there
+			# are potential XSS vulnerabilities if I do that).
+			"""<html><body><script>try{document.domain="foo.bar.com";}catch(e){}</script>
+<script>try {parent.m("11111")} catch(e) {}</script>\n#{ieJunk}""",
+			'''<script>try {parent.m("2")} catch(e) {}</script>
+<script>try  {parent.d(); }catch (e){}</script>\n''')
 	
 	# node-browserchannel is only compatible with browserchannel client v8. I don't know whats changed
 	# since old versions (maybe v6 would be easy to support) but I don't care. If the client specifies
@@ -317,20 +328,21 @@ module.exports = testCase
 		# is sent back, so for now I'm just going to ignore checking it.
 		#`'phase 2, ver 7, http': check400 '/channel/test?VER=7&TYPE=html'`
 		#`'phase 2, no version, http': check400 '/channel/test?TYPE=html'`
-	# # Tests to write
-	#
-	# I need to write the following tests:
-	#
-	# ## Channel testing
-	#
-	# There are two testing APIs that node-browserchannel supports
-	#
-	# - `test/?MODE=init`
-	#   This gets a server's subdomains
-	#
-	# - `test/?MODE=`
-	# eg test?VER=8&TYPE=html&zx=558cz3evkwuu&t=1
-		# - 
+	
+	# > At the moment the server expects the client will add a zx=###### query parameter to all requests.
+	# The server isn't strict about this, so I'll ignore it in the tests for now.
+
+	# Server connection tests
+	
+	'A client connects if it POSTs the right connection stuff': (test) -> test.done()
+	
+	'The server gets any messages sent immediately by the server': (test) -> test.done()
+
+	'The client can post messages to the server, and they are received': (test) -> test.done()
+
+	'The backchannel doesnt return anything until the server sends something': (test) -> test.done()
+
+#	'The backchannel has messages
 
 #server = connect browserChannel (client) ->
 #	if client.address != '127.0.0.1' or client.appVersion != '10'
