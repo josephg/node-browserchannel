@@ -52,7 +52,7 @@ expectCalls = (n, callback) ->
 
 # This returns a function that calls test.done() after it has been called n times. Its
 # useful when you want a bunch of mini tests inside one test case.
-exports.makePassPart = (test, n) ->
+makePassPart = (test, n) ->
 	expectCalls n, -> test.done()
 
 
@@ -63,6 +63,7 @@ exports.makePassPart = (test, n) ->
 buffer = (res, callback) ->
 	data = []
 	res.on 'data', (chunk) ->
+		#console.warn chunk.toString()
 		data.push chunk.toString 'utf8'
 	res.on 'end', -> callback data.join ''
 
@@ -88,6 +89,48 @@ expect = (res, str, callback) ->
 			res.removeListener 'data', listener
 			res.removeListener 'end', endlistener
 			callback()
+
+# The backchannel is implemented using a bunch of messages which look like this:
+#
+# ```
+# 36
+# [[0,["c","92208FBF76484C10",,8]
+# ]
+# ]
+# ```
+#
+# They have a length string (in bytes) followed by some JSON data. Google's
+# implementation doesn't use strict JSON encoding (like above). They can optionally
+# have extra chunks.
+#
+# This format is used for:
+#
+# - All XHR backchannel messages
+# - The response to the initial connect (XHR or HTTP)
+# - The server acknowledgement to forward channel messages
+readLengthPrefixedJSON = (res, callback) ->
+	data = ''
+	length = null
+	res.on 'data', listener = (chunk) ->
+		data += chunk.toString 'utf8'
+
+		if length == null
+			# The number of bytes is written in an int on the first line.
+			lines = data.split '\n'
+			# If lines length > 1, then we've read the first newline, which was after the length
+			# field.
+			if lines.length > 1
+				length = parseInt lines.shift()
+
+				# Now we'll rewrite the data variable to not include the length.
+				data = lines.join '\n'
+
+		if data.length == length
+			obj = JSON.parse data
+			res.removeListener 'data', listener
+			callback obj
+		else if data.length > length
+			throw new Error "Read more bytes from stream than expected"
 
 # Copied from google's implementation. The contents of this aren't actually relevant,
 # but I think its important that its pseudo-random so if the connection is compressed,
@@ -147,7 +190,16 @@ module.exports = testCase
 		# That will automatically set this.server and this.port to the callback arguments.
 		# 
 		# Actually calling the callback starts the test.
-		createServer null, ((client) => @onClient client), (@server, @port) =>
+		createServer ((client) => @onClient client), (@server, @port) =>
+
+			# I'll add a couple helper methods for tests to easily message the server.
+			@get = (path, callback) =>
+				http.get {host:'localhost', path, @port}, callback
+
+			@post = (path, data, callback) =>
+				req = http.request {method:'POST', host:'localhost', path, @port}, callback
+				req.end data
+
 			callback()
 
 	tearDown: (callback) ->
@@ -169,7 +221,7 @@ module.exports = testCase
 	# prefix isn't supported by node-browerchannel and by default no basePrefix is set. So with no
 	# options specified, this GET should return [null,null].
 	'GET /test/?mode=INIT with no baseprefix set returns [null, null]': (test) ->
-		http.get {path:'/channel/test?VER=8&MODE=init', host: 'localhost', port: @port}, (response) ->
+		@get '/channel/test?VER=8&MODE=init', (response) ->
 			test.strictEqual response.statusCode, 200
 			buffer response, (data) ->
 				test.strictEqual data, '[null,null]'
@@ -231,7 +283,7 @@ module.exports = testCase
 	# I've set up the createServer() method above to send 'Other middleware' if browserchannel passes
 	# the response on to the next handler.
 	'getting a url outside of the bound range gets passed to other middleware': (test) ->
-		http.get {path:'/otherapp', host: 'localhost', port: @port}, (response) ->
+		@get '/otherapp', (response) ->
 			test.strictEqual response.statusCode, 200
 			buffer response, (data) ->
 				test.strictEqual data, 'Other middleware'
@@ -244,7 +296,7 @@ module.exports = testCase
 	# That design decision makes it impossible to add a custom 404 page to /channel/FOO, but I don't think thats a
 	# big deal.
 	'getting a wacky url inside the bound range returns 404': (test) ->
-		http.get {path:'/channel/doesnotexist', host: 'localhost', port: @port}, (response) ->
+		@get '/channel/doesnotexist', (response) ->
 			test.strictEqual response.statusCode, 404
 			test.done()
 
@@ -263,7 +315,7 @@ module.exports = testCase
 	#     parent.d();
 	'Getting test phase 2 returns 11111 then 2': do ->
 		makeTest = (type, message1, message2) -> (test) ->
-			http.get {path:"/channel/test?VER=8&TYPE=#{type}", host: 'localhost', port: @port}, (response) ->
+			@get "/channel/test?VER=8&TYPE=#{type}", (response) ->
 				test.strictEqual response.statusCode, 200
 				expect response, message1, ->
 					# Its important to make sure that message 2 isn't sent too soon (<2 seconds).
@@ -316,7 +368,7 @@ module.exports = testCase
 		# All these tests look 95% the same. Instead of writing the same test all those times, I'll use this
 		# little helper method to generate them.
 		check400 = (path) -> (test) ->
-			http.get {path, host: 'localhost', port: @port}, (response) ->
+			@get path, (response) ->
 				test.strictEqual response.statusCode, 400
 				test.done()
 
@@ -332,17 +384,177 @@ module.exports = testCase
 	# > At the moment the server expects the client will add a zx=###### query parameter to all requests.
 	# The server isn't strict about this, so I'll ignore it in the tests for now.
 
-	# Server connection tests
+	# # Server connection tests
 	
-	'A client connects if it POSTs the right connection stuff': (test) -> test.done()
+	# These tests make pretend client connections by crafting raw HTTP queries. I'll make another set of
+	# tests later which spam the server with a million fake clients.
+	#
+	# To start with, simply connect to a server using the BIND API. A client sends a server a few parameters:
+	#
+	# - **CVER**: Client application version
+	# - **RID**: Client-side generated random number, which is the initial sequence number for the
+	#   client's requests.
+	# - **VER**: Browserchannel protocol version. Must be 8.
+	# - **t**: The connection attempt number. This is currently ignored by the BC server. (I'm not sure
+	#   what google's implementation does with this).
+	'A client connects if it POSTs the right connection stuff': (test) ->
+		id = null
+		# When a client request comes in, we should get a connected client through the browserchannel
+		# server API.
+		#
+		# We need this client in order to find out the client's ID, which should match up with part of the
+		# server's response.
+		@onClient = (client) ->
+			test.ok client
+			test.strictEqual typeof client.id, 'string'
+			test.strictEqual client.state, 'init'
+			test.strictEqual client.appVersion, '99'
+			id = client.id
+			client.on 'map', -> throw new Error 'Should not have received data'
+
+		# The client starts a BC connection by POSTing to /bind? with no session ID specified.
+		# The client can optionally send data here, but in this case it won't (hence the `count=0`).
+		@post '/channel/bind?VER=8&RID=1000&CVER=99&t=1&junk=asdfasdf', 'count=0', (res) =>
+			expected = (JSON.stringify [[0, ['c', id, null, 8]]]) + '\n'
+			buffer res, (data) ->
+				# Even for old IE clients, the server responds in length-prefixed JSON style.
+				test.strictEqual data, "#{expected.length}\n#{expected}"
+				test.expect 5
+				test.done()
+
+	# The CVER= property is optional during client connections. If its left out, client.appVersion is
+	# null.
+	'A client connects ok even if it doesnt specify an app version': (test) ->
+		id = null
+		@onClient = (client) ->
+			test.strictEqual client.appVersion, null
+			id = client.id
+			client.on 'map', -> throw new Error 'Should not have received data'
+
+		@post '/channel/bind?VER=8&RID=1000&t=1&junk=asdfasdf', 'count=0', (res) =>
+			expected = (JSON.stringify [[0, ['c', id, null, 8]]]) + '\n'
+			buffer res, (data) ->
+				test.strictEqual data, "#{expected.length}\n#{expected}"
+				test.expect 2
+				test.done()
+
+	# This time, we'll send a map to the server during the initial handshake. This should be received
+	# by the server as normal.
+	'The client can post messages to the server during initialization': (test) ->
+		@onClient = (client) ->
+			client.on 'map', (data) ->
+				test.deepEqual data, {k:'v'}
+				test.done()
+
+		@post '/channel/bind?VER=8&RID=1000&t=1', 'count=1&ofs=0&req0_k=v', (res) =>
 	
-	'The server gets any messages sent immediately by the server': (test) -> test.done()
+	# The data received by the server should be properly URL decoded and whatnot.
+	'The client can post messages to the server during initialization': (test) ->
+		@onClient = (client) ->
+			client.on 'map', (data) ->
+				test.deepEqual data, {"_int_^&^%#net":'hi"there&&\nsam'}
+				test.done()
 
-	'The client can post messages to the server, and they are received': (test) -> test.done()
+		@post('/channel/bind?VER=8&RID=1000&t=1',
+			'count=1&ofs=0&req0__int_%5E%26%5E%25%23net=hi%22there%26%26%0Asam', ->)
 
-	'The backchannel doesnt return anything until the server sends something': (test) -> test.done()
+	# After a client connects, it can POST data to the server using URL-encoded POST data. This data
+	# is sent by POSTing to /bind?SID=....
+	#
+	# The data looks like this:
+	#
+	# count=5&ofs=1000&req0_KEY1=VAL1&req0_KEY2=VAL2&req1_KEY3=req1_VAL3&...
+	'The client can post messages to the server after initialization': (test) ->
+		@post '/channel/bind?VER=8&RID=1000&t=1', 'count=0', (res) =>
 
-#	'The backchannel has messages
+		@onClient = (client) =>
+			client.on 'map', (data) ->
+				test.deepEqual data, {k:'v'}
+				test.done()
+
+			@post "/channel/bind?VER=8&RID=1001&SID=#{client.id}&AID=0", 'count=1&ofs=0&req0_k=v', (res) =>
+	
+	# When the server gets a forwardchannel request, it should reply with a little array saying whats
+	# going on.
+	'The server acknowledges forward channel messages correctly': (test) ->
+		@post '/channel/bind?VER=8&RID=1000&t=1', 'count=0', (res) =>
+
+		@onClient = (client) =>
+			@post "/channel/bind?VER=8&RID=1001&SID=#{client.id}&AID=0", 'count=1&ofs=0&req0_k=v', (res) =>
+				readLengthPrefixedJSON res, (data) =>
+					# The server responds with [backchannelMissing ? 0 : 1, lastSentAID, outstandingBytes]
+					test.deepEqual data, [0, 0, 0]
+					test.done()
+
+	# If the server has an active backchannel, it responds to forward channel requests notifying the client
+	# that the backchannel connection is alive and well.
+	'The server tells the client if the backchannel is alive': (test) ->
+		@post '/channel/bind?VER=8&RID=1000&t=1', 'count=0', (res) =>
+
+		@onClient = (client) =>
+			# This will fire up a backchannel connection to the server.
+			req = @get "/channel/bind?VER=8&RID=rpc&SID=#{client.id}&AID=0&TYPE=xmlhttp", (res) =>
+				# The client shouldn't get any data through the backchannel.
+				res.on 'data', -> throw new Error 'Should not get data through backchannel'
+
+			# Unfortunately, the GET request is sent *after* the POST, so we have to wrap the
+			# post in a timeout to make sure it hits the server after the backchannel connection is
+			# established.
+			setTimeout =>
+					@post "/channel/bind?VER=8&RID=1001&SID=#{client.id}&AID=0", 'count=1&ofs=0&req0_k=v', (res) =>
+						readLengthPrefixedJSON res, (data) =>
+							# This time, we get a 1 as the first argument because the backchannel connection is
+							# established.
+							test.deepEqual data, [1, 0, 0]
+							# The backchannel hasn't gotten any data yet. It'll spend 15 seconds or so timing out
+							# if we don't abort it manually.
+							req.abort()
+							test.done()
+				, 50
+	
+	# When the user calls send(), data is queued by the server and sent into the next backchannel connection.
+	#
+	# The server will use the initial establishing connection if thats available, or it'll send it the next
+	# time the client opens a backchannel connection.
+	'The server returns data on the initial connection when send is called immediately': (test) ->
+		testData = ['hello', 'there', null, 1000, {}, [], [555]]
+		@onClient = (@client) =>
+			@client.send testData
+
+		@post '/channel/bind?VER=8&RID=1000&t=1', 'count=0', (res) =>
+			readLengthPrefixedJSON res, (data) =>
+				test.deepEqual data, [[0, ['c', @client.id, null, 8]], [1, testData]]
+				test.done()
+
+	'The server returns data through the available backchannel when send is called later': (test) -> test.done()
+
+	'The server buffers data if no backchannel is available': (test) -> test.done()
+	
+	'The backchannel is closed after each packet if buffering is turned on': (test) -> test.done()
+
+	'The server gives the client correctly formatted data if TYPE=html': (test) -> test.done()
+
+	'The server orders forwardchannel messages correctly using RIDs': (test) -> test.done()
+
+	'If a client disconnects then reconnects, specifying OSID= and OAID=, the local client doesnt notice': (test) -> test.done()
+
+	'If a client reconnects, the server resends any messages the client did not receive': (test) -> test.done()
+
+	'client.stop() sends stop to a client': (test) -> test.done()
+
+	'client.close() makes subsequent client messages return an error': (test) -> test.done()
+
+	'The client times out after awhile': (test) -> test.done()
+
+	'Sending heartbeat messages makes the timeout not happen': (test) -> test.done()
+
+	'If a client times out, any messages queued will have an error callback called': (test) -> test.done()
+
+	'The server sends accept:JSON header': (test) -> test.done()
+
+	'The server accepts JSON data': (test) -> test.done()
+	
+	'Connecting with a version thats not 8 breaks': (test) -> test.done()
 
 #server = connect browserChannel (client) ->
 #	if client.address != '127.0.0.1' or client.appVersion != '10'

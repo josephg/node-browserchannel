@@ -177,7 +177,7 @@ bufferPostData = (req, callback) ->
 # }
 # ```
 #
-# ... and we will return an object in the form of `[{x:'3', y:'10'}, {abc: 'def'}]`
+# ... and we will return an object in the form of `[{x:'3', y:'10'}, {abc: 'def'}, ...]`
 #
 # I really wish they'd just used JSON. I guess this lets you submit forward channel
 # data using just a GET request if you really want to. I wonder if thats how early
@@ -311,6 +311,7 @@ module.exports = browserChannel = (options, onConnect) ->
 		#
 		# This is a handle to that request.
 		client.setBackChannel = (res, query) ->
+			#console.warn 'set bc'
 			throw new Error 'Invalid backchannel headers' unless query.RID == 'rpc'
 
 			if @backChannel
@@ -408,6 +409,7 @@ module.exports = browserChannel = (options, onConnect) ->
 					sentSomething = client.sendTo client.backChannelMethods.write
 					client.backChannelMethods.end() if !client.chunk and sentSomething
 					
+		# Send the client array data through the backchannel
 		client.send = (arr) ->
 			@queueArray arr
 			@flush()
@@ -418,7 +420,7 @@ module.exports = browserChannel = (options, onConnect) ->
 		# The client's reported application version, or null. This is sent when the
 		# connection is first requested, so you can use it to make your application die / stay
 		# compatible with people who don't close their browsers.
-		client.appVersion = appVersion if appVersion?
+		client.appVersion = appVersion or null
 
 		# Stop the client's connections and make it die. This will send the special
 		# 'stop' signal to the client, which will cause it to stop trying to reconnect.
@@ -430,10 +432,8 @@ module.exports = browserChannel = (options, onConnect) ->
 		# The client will probably try and reconnect if you simply close its connections.
 		# It'll get a new client object when it does so.
 		client.close = ->
+			throw new Error 'not implemented'
 			# ... close all connections and stuff.
-
-		# Send the client array data through the backchannel
-		client.sendArray = (data) ->
 
 		# Remind everybody that the client is still alive and ticking. If the client
 		# doesn't see any traffic for awhile, it'll get deleted and the browser will just have
@@ -442,7 +442,7 @@ module.exports = browserChannel = (options, onConnect) ->
 
 		clients[client.id] = client
 
-		console.log "Created a new client #{client.id} from #{client.address}"
+#		console.log "Created a new client #{client.id} from #{client.address}"
 
 		client
 
@@ -456,6 +456,7 @@ module.exports = browserChannel = (options, onConnect) ->
 	#   handle the request.
 	(req, res, next) ->
 		{query, pathname} = parse req.url, true
+		#console.warn req.method, req.url
 		return next() if pathname.substring(0, base.length) != base
 
 		{writeHead, write, writeRaw, end, signalError} = messagingMethods query, res
@@ -474,6 +475,9 @@ module.exports = browserChannel = (options, onConnect) ->
 			#### Phase 1: Server info
 			# The client is requests host prefixes. The server responds with an array of
 			# ['hostprefix' or null, 'blockedprefix' or null].
+			#
+			# > Actually, I think you might be able to return [] if neither hostPrefix nor blockedPrefix
+			# > is defined. (Thats what google wave seems to do)
 			#
 			# - **hostprefix** is subdomain prepended onto the hostname of each request.
 			# This gets around browser connection limits. Using this requires a bank of
@@ -519,18 +523,19 @@ module.exports = browserChannel = (options, onConnect) ->
 			# is created immediately if the connection is new.
 			if query.SID
 				client = clients[query.SID]
-				unless client?
-					# This is a special error code for the client. It tells the client to abandon its
-					# connection request and reconnect.
-					signalError '400', '"Error: Unknown SID"'
-					return
+				# This is a special error code for the client. It tells the client to abandon its
+				# connection request and reconnect.
+				#
+				# I've put quotes around this because it gets JSON.parse'd.
+				return signalError '400', '"Error: Unknown SID"' unless client?
 
 			#### Forward Channel
 			if req.method == 'POST'
 				if client == undefined
+					
 					# The client is new! Make them a new client object and let the
 					# application know.
-					client = createClient(req.connection.remoteAddress, query.CVER, query.OSID, query.OAID)
+					client = createClient req.connection.remoteAddress, query.CVER, query.OSID, query.OAID
 					onConnect? client
 					init = true
 
@@ -540,12 +545,11 @@ module.exports = browserChannel = (options, onConnect) ->
 					maps = decodeMaps data
 					client.emit 'map', map for map in maps unless client.state == 'stop'
 
-					console.log 'writeHead'
 					res.writeHead 200, 'OK', standardHeaders
 					# On the initial request, we send any pending server arrays to the client.
 					# This is important because it tells the client what its session id is.
 					if init
-						client.sendTo (data) -> res.write(data)
+						client.sendTo (data) -> res.write "#{data.length}\n#{data}"
 						res.end()
 					else
 						# On normal forward channels, we reply to the request by telling the client
@@ -557,7 +561,12 @@ module.exports = browserChannel = (options, onConnect) ->
 						else
 							JSON.stringify(unacknowledgedArrays).length
 
-						response = JSON.stringify [client.backChannel?, client.lastSentArrayId, outstandingBytes]
+						response = JSON.stringify [
+							(if client.backChannel then 1 else 0)
+							client.lastSentArrayId
+							outstandingBytes
+						]
+
 						res.end "#{response.length}\n#{response}"
 
 			#### Back Channel
