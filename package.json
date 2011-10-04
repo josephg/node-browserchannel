@@ -12,6 +12,9 @@
   "engines": {
     "node": "~0.4"
   },
+  "scripts": {
+    "test": "nodeunit tests.coffee"
+  },
   "dependencies": {
     "coffee-script": "~1",
     "hat": "*",
