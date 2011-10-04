@@ -18,6 +18,7 @@
   "dependencies": {
     "coffee-script": "~1",
     "hat": "*",
+    "connect": "~1.7",
     "timerstub": "*"
   },
   "devDependencies": {}

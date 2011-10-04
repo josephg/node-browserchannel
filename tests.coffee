@@ -526,9 +526,22 @@ module.exports = testCase
 				test.deepEqual data, [[0, ['c', @client.id, null, 8]], [1, testData]]
 				test.done()
 
-	'The server returns data through the available backchannel when send is called later': (test) -> test.done()
+	'The server buffers data if no backchannel is available': (test) ->
+		@post '/channel/bind?VER=8&RID=1000&t=1', 'count=0', (res) =>
 
-	'The server buffers data if no backchannel is available': (test) -> test.done()
+		testData = ['hello', 'there', null, 1000, {}, [], [555]]
+		@onClient = (@client) =>
+			# The first response to the server is sent after this method returns, so if we send the data
+			# in process.nextTick, it'll get buffered.
+			process.nextTick =>
+				@client.send testData
+
+				@get "/channel/bind?VER=8&RID=rpc&SID=#{client.id}&AID=0&TYPE=xmlhttp", (res) =>
+					readLengthPrefixedJSON res, (data) =>
+						test.deepEqual data, [[1, testData]]
+						test.done()
+
+	'The server returns data through the available backchannel when send is called later': (test) -> test.done()
 	
 	'The backchannel is closed after each packet if buffering is turned on': (test) -> test.done()
 
