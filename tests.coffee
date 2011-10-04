@@ -526,6 +526,7 @@ module.exports = testCase
 				test.deepEqual data, [[0, ['c', @client.id, null, 8]], [1, testData]]
 				test.done()
 
+
 	'The server buffers data if no backchannel is available': (test) ->
 		@post '/channel/bind?VER=8&RID=1000&t=1', 'count=0', (res) =>
 
@@ -536,14 +537,47 @@ module.exports = testCase
 			process.nextTick =>
 				@client.send testData
 
-				@get "/channel/bind?VER=8&RID=rpc&SID=#{client.id}&AID=0&TYPE=xmlhttp", (res) =>
+				req = @get "/channel/bind?VER=8&RID=rpc&SID=#{client.id}&AID=0&TYPE=xmlhttp&CI=0", (res) =>
 					readLengthPrefixedJSON res, (data) =>
 						test.deepEqual data, [[1, testData]]
+						req.abort()
 						test.done()
-
-	'The server returns data through the available backchannel when send is called later': (test) -> test.done()
 	
-	'The backchannel is closed after each packet if buffering is turned on': (test) -> test.done()
+	# This time, we'll fire up the back channel first (and give it time to get established) _then_
+	# send data through the client.
+	'The server returns data through the available backchannel when send is called later': (test) ->
+		@post '/channel/bind?VER=8&RID=1000&t=1', 'count=0', (res) =>
+
+		testData = ['hello', 'there', null, 1000, {}, [], [555]]
+		@onClient = (@client) =>
+			# Fire off the backchannel request as soon as the client has connected
+			req = @get "/channel/bind?VER=8&RID=rpc&SID=#{client.id}&AID=0&TYPE=xmlhttp&CI=0", (res) =>
+
+				#res.on 'data', (chunk) -> console.warn chunk.toString()
+				readLengthPrefixedJSON res, (data) =>
+					test.deepEqual data, [[1, testData]]
+					req.abort()
+					test.done()
+
+			# Send the data outside of the get block to make sure it makes it through.
+			setTimeout (=> @client.send testData), 50
+
+	# If there's a proxy in the way which chunks up responses before sending them on, the client adds a
+	# &CI=1 argument on the backchannel. This causes the server to end the HTTP query after each message
+	# is sent, so the data is sent to the client.
+	'The backchannel is closed after each packet if buffering is turned on': (test) ->
+		@post '/channel/bind?VER=8&RID=1000&t=1', 'count=0', (res) =>
+
+		testData = ['hello', 'there', null, 1000, {}, [], [555]]
+		@onClient = (@client) =>
+			process.nextTick =>
+				@client.send testData
+
+				@get "/channel/bind?VER=8&RID=rpc&SID=#{client.id}&AID=0&TYPE=xmlhttp&CI=1", (res) =>
+					readLengthPrefixedJSON res, (data) =>
+						test.deepEqual data, [[1, testData]]
+
+					res.on 'end', -> test.done()
 
 	'The server gives the client correctly formatted data if TYPE=html': (test) -> test.done()
 
@@ -561,7 +595,7 @@ module.exports = testCase
 
 	'Sending heartbeat messages makes the timeout not happen': (test) -> test.done()
 
-	'If a client times out, any messages queued will have an error callback called': (test) -> test.done()
+	'If a client times out, unacknowledged messages have an error callback called': (test) -> test.done()
 
 	'The server sends accept:JSON header': (test) -> test.done()
 
