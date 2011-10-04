@@ -561,11 +561,12 @@ module.exports = testCase
 
 			# Send the data outside of the get block to make sure it makes it through.
 			setTimeout (=> @client.send testData), 50
+	
 
 	# If there's a proxy in the way which chunks up responses before sending them on, the client adds a
 	# &CI=1 argument on the backchannel. This causes the server to end the HTTP query after each message
 	# is sent, so the data is sent to the client.
-	'The backchannel is closed after each packet if buffering is turned on': (test) ->
+	'The backchannel is closed after each packet if chunking is turned off': (test) ->
 		@post '/channel/bind?VER=8&RID=1000&t=1', 'count=0', (res) =>
 
 		testData = ['hello', 'there', null, 1000, {}, [], [555]]
@@ -573,15 +574,152 @@ module.exports = testCase
 			process.nextTick =>
 				@client.send testData
 
+				# Instead of the usual CI=0 we're passing CI=1 here.
 				@get "/channel/bind?VER=8&RID=rpc&SID=#{client.id}&AID=0&TYPE=xmlhttp&CI=1", (res) =>
 					readLengthPrefixedJSON res, (data) =>
 						test.deepEqual data, [[1, testData]]
 
 					res.on 'end', -> test.done()
 
-	'The server gives the client correctly formatted data if TYPE=html': (test) -> test.done()
+	# Normally, the server doesn't close the connection after each backchannel message.
+	'The backchannel is left open if CI=0': (test) ->
+		@post '/channel/bind?VER=8&RID=1000&t=1', 'count=0', (res) =>
 
-	'The server orders forwardchannel messages correctly using RIDs': (test) -> test.done()
+		testData = ['hello', 'there', null, 1000, {}, [], [555]]
+		@onClient = (@client) =>
+			process.nextTick =>
+				@client.send testData
+
+				req = @get "/channel/bind?VER=8&RID=rpc&SID=#{client.id}&AID=0&TYPE=xmlhttp&CI=0", (res) =>
+					readLengthPrefixedJSON res, (data) =>
+						test.deepEqual data, [[1, testData]]
+
+					# After receiving the data, the client must not close the connection. (At least, not unless
+					# it times out naturally)
+					res.on 'end', -> throw new Error 'connection should have stayed open'
+
+					setTimeout ->
+							req.abort()
+							test.done()
+						, 50
+
+	# On IE, the data is all loaded using iframes. The backchannel spits out data using inline scripts
+	# in an HTML page.
+	#
+	# I've written this test separately from the tests above, but it would really make more sense
+	# to rerun the same set of tests in both HTML and XHR modes to make sure the behaviour is correct
+	# in both instances.
+	'The server gives the client correctly formatted backchannel data if TYPE=html': (test) ->
+		@post '/channel/bind?VER=8&RID=1000&t=1', 'count=0', (res) =>
+
+		testData = ['hello', 'there', null, 1000, {}, [], [555]]
+		@onClient = (@client) =>
+			process.nextTick =>
+				@client.send testData
+
+				# The type is specified as an argument here in the query string. For this test, I'm making
+				# CI=1, because the test is easier to write that way.
+				#
+				# In truth, I don't care about IE support as much as support for modern browsers. This might
+				# be a mistake.. I'm not sure. IE9's XHR support should work just fine for browserchannel,
+				# though google's BC client doesn't use it.
+				@get "/channel/bind?VER=8&RID=rpc&SID=#{client.id}&AID=0&TYPE=html&CI=1", (res) =>
+					expect res,
+						# Interestingly, google doesn't double-encode the string like this. Instead of turning
+						# quotes `"` into escaped quotes `\"`, it uses unicode encoding to turn them into \42 and
+						# stuff like that. I'm not sure why they do this - it produces the same effect in IE8.
+						# I should test it in IE6 and see if there's any problems.
+						"""<html><body><script>try {parent.m(#{JSON.stringify JSON.stringify([[1, testData]]) + '\n'})} catch(e) {}</script>
+#{ieJunk}<script>try  {parent.d(); }catch (e){}</script>\n""", =>
+							# Because I'm lazy, I'm going to chain on a test to make sure CI=0 works as well.
+							data2 = {other:'data'}
+							@client.send data2
+							# I'm setting AID=1 here to indicate that the client has seen array 1.
+							req = @get "/channel/bind?VER=8&RID=rpc&SID=#{client.id}&AID=1&TYPE=html&CI=0", (res) =>
+								expect res,
+									"""<html><body><script>try {parent.m(#{JSON.stringify JSON.stringify([[2, data2]]) + '\n'})} catch(e) {}</script>
+#{ieJunk}""", =>
+										req.abort()
+										test.done()
+	
+	# If there's a basePrefix set, the returned HTML sets `document.domain = ` before sending messages.
+	# I'm super lazy, and just copy+pasting from the test above. There's probably a way to factor these tests
+	# nicely, but I'm not in the mood to figure it out at the moment.
+	'The server sets the domain if we have a domain set': (test) ->
+		@post '/channel/bind?VER=8&RID=1000&t=1', 'count=0', (res) =>
+
+		testData = ['hello', 'there', null, 1000, {}, [], [555]]
+		@onClient = (@client) =>
+			process.nextTick =>
+				@client.send testData
+				# This time we're setting DOMAIN=X, and the response contains a document.domain= block. Woo.
+				@get "/channel/bind?VER=8&RID=rpc&SID=#{client.id}&AID=0&TYPE=html&CI=1&DOMAIN=foo.com", (res) =>
+					expect res,
+						"""<html><body><script>try{document.domain=\"foo.com\";}catch(e){}</script>
+<script>try {parent.m(#{JSON.stringify JSON.stringify([[1, testData]]) + '\n'})} catch(e) {}</script>
+#{ieJunk}<script>try  {parent.d(); }catch (e){}</script>\n""", =>
+							data2 = {other:'data'}
+							@client.send data2
+							req = @get "/channel/bind?VER=8&RID=rpc&SID=#{client.id}&AID=1&TYPE=html&CI=0&DOMAIN=foo.com", (res) =>
+								expect res,
+									# Its interesting - in the test channel, the ie junk comes right after the document.domain= line,
+									# but in a backchannel like this it comes after. The behaviour here is the same in google's version.
+									#
+									# I'm not sure if its actually significant though.
+									"""<html><body><script>try{document.domain=\"foo.com\";}catch(e){}</script>
+<script>try {parent.m(#{JSON.stringify JSON.stringify([[2, data2]]) + '\n'})} catch(e) {}</script>
+#{ieJunk}""", =>
+										req.abort()
+										test.done()
+
+	# If a client thinks their backchannel connection is closed, they might open a second backchannel connection.
+	# In this case, the server should close the old one and resume sending stuff using the new connection.
+	'The server closes old backchannel connections': (test) ->
+		@post '/channel/bind?VER=8&RID=1000&t=1', 'count=0', (res) =>
+		testData = ['hello', 'there', null, 1000, {}, [], [555]]
+		@onClient = (@client) =>
+			process.nextTick =>
+				@client.send testData
+
+				# As usual, we'll get the sent data through the backchannel connection. The connection is kept open...
+				@get "/channel/bind?VER=8&RID=rpc&SID=#{client.id}&AID=0&TYPE=xmlhttp&CI=0", (res) =>
+					readLengthPrefixedJSON res, (data) =>
+						# ... and the data has been read. Now we'll open another connection and check that the first connection
+						# gets closed.
+
+						req2 = @get "/channel/bind?VER=8&RID=rpc&SID=#{client.id}&AID=1&TYPE=xmlhttp&CI=0", (res2) =>
+
+						res.on 'end', ->
+							req2.abort()
+							test.done()
+
+	# The client attaches a sequence number (*RID*) to every message, to make sure they don't end up out-of-order at
+	# the server's end.
+	#
+	# We'll purposefully send some messages out of order and make sure they're held and passed through in order.
+	#
+	# Gogo gadget reimplementing TCP.
+	'The server orders forwardchannel messages correctly using RIDs': (test) ->
+		# The initial sequence number is 1000...
+		@post '/channel/bind?VER=8&RID=1000&t=1', 'count=0', (res) =>
+
+		# We'll send 2 maps, the first one will be {v:1} then {v:0}. They should be swapped around by the server.
+		lastVal = 0
+		@onClient = (client) =>
+			client.on 'map', (map) ->
+				test.strictEqual map.v, "#{lastVal++}", 'messages arent reordered in the server'
+				test.done() if map.v == '2'
+		
+			# First, send `[{v:2}]`
+			@post "/channel/bind?VER=8&RID=1002&SID=#{client.id}&AID=0", 'count=1&ofs=2&req0_v=2', (res) =>
+			# ... then `[{v:0}, {v:1}]` a few MS later.
+			setTimeout =>
+					@post "/channel/bind?VER=8&RID=1001&SID=#{client.id}&AID=0", 'count=2&ofs=0&req0_v=0&req1_v=1', (res) =>
+				, 50
+	
+	'Repeated forward channel messages are discarded': (test) -> test.done()
+
+	'The server resends lost arrays if the client asks for them': (test) -> test.done()
 
 	'If a client disconnects then reconnects, specifying OSID= and OAID=, the local client doesnt notice': (test) -> test.done()
 
@@ -589,11 +727,13 @@ module.exports = testCase
 
 	'client.stop() sends stop to a client': (test) -> test.done()
 
+	'After stop() is called, no maps are emitted by the client': (test) -> test.done()
+
 	'client.close() makes subsequent client messages return an error': (test) -> test.done()
 
 	'The client times out after awhile': (test) -> test.done()
 
-	'Sending heartbeat messages makes the timeout not happen': (test) -> test.done()
+	'The server sends heartbeat messages on the backchannel, which keeps it open': (test) -> test.done()
 
 	'If a client times out, unacknowledged messages have an error callback called': (test) -> test.done()
 

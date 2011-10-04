@@ -373,6 +373,47 @@ module.exports = browserChannel = (options, onConnect) ->
 		# is its session id and host prefix and stuff.
 		client.queueArray ['c', client.id, getHostPrefix(), 8]
 
+		# ### Maps
+		# 
+		# The client sends maps to the server using POST requests. Its possible for the requests
+		# to come in out of order, so sometimes we need to buffer up incoming maps and reorder them
+		# before emitting them to the user.
+		#
+		# Each map has an ID (which starts at 0 when the session is first created). 
+		#
+		# We'll store the ID of the next map the server expects from the client.
+		client.nextMapId = 0
+
+		# We'll emit maps to the user immediately if they're in order, but if they're out of order
+		# we'll buffer them up in a dictionary. This will associate mapId -> [map] for maps which have been
+		# received but haven't been emitted yet. This is a sparse set.
+		#
+		# There's a potential DOS attack here whereby a client could just spam the server with
+		# out-of-order maps until it runs out of memory. We should probably dump a client if there are
+		# too many maps in this dictionary.
+		client.bufferedMaps = {}
+
+		# This method is called whenever we get maps from the client. Offset is the ID of the first
+		# map, and maps is an array containing the actual map data.
+		client.receivedMaps = (offset, maps) ->
+			# The server's response could have been lost in transit. In this case, we might get the maps
+			# sent to us twice. We can safely ignore any maps with id < nextMapId or resent maps which are
+			# already buffered.
+			return if offset < @nextMapId or @bufferedMaps[offset]?
+
+			@bufferedMaps[offset] = maps
+
+			# Next flush any maps, if we can. Its a bit inefficient putting maps in a dictionary then
+			# removing them again, but not significantly... and the code is more elegant this way.
+			while (maps = @bufferedMaps[@nextMapId])?
+				# If an exception is thrown during this loop, I'm not really sure what the behaviour should be.
+				for map in maps
+					@emit 'map', map unless @state == 'stop'
+
+				delete @bufferedMaps[@nextMapId]
+
+				@nextMapId += maps.length
+
 		# ## Encoding server arrays for the back channel
 		#
 		# The server sends data to the client in **chunks**. Each chunk is a *JSON* array prefixed
@@ -543,7 +584,7 @@ module.exports = browserChannel = (options, onConnect) ->
 
 				bufferPostData req, (data) ->
 					maps = decodeMaps data
-					client.emit 'map', map for map in maps unless client.state == 'stop'
+					client.receivedMaps (parseInt data.ofs), maps if maps.length > 0
 
 					res.writeHead 200, 'OK', standardHeaders
 					# On the initial request, we send any pending server arrays to the client.
