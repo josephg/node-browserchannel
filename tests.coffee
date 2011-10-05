@@ -206,6 +206,30 @@ module.exports = testCase
 				req = http.request {method:'POST', host:'localhost', path, @port}, callback
 				req.end data
 
+			# One of the most common tasks in tests is to create a new client connection for
+			# some reason. @connect is a little helper method for that. It simply sends the
+			# http POST to create a new session and calls the callback when the client has been
+			# created.
+			#
+			# It also makes @onClient throw an error - very few tests need multiple clients,
+			# so I special case them when they do.
+			#
+			# Its kind of annoying - for a lot of tests I need to do custom logic in the @post
+			# handler *and* custom logic in @onClient. So, callback can be an object specifying
+			# callbacks for each if you want that. Its a shame though, it makes this function
+			# kinda ugly :/
+			@connect = (callback) ->
+				# This connect helper method is only useful if you don't care about the initial
+				# post response.
+				@post '/channel/bind?VER=8&RID=1000&t=1', 'count=0'
+
+				@onClient = (@client) =>
+					@onClient = -> throw new Error 'onClient() called - I didn\'t expect another client to be created'
+					# Keep this bound. I think there's a fancy way to do this in coffeescript, but
+					# I'm not sure what it is.
+					callback.call this
+
+			# Finally, start the test.
 			callback()
 
 	tearDown: (callback) ->
@@ -430,12 +454,13 @@ module.exports = testCase
 	
 	# Once a client's session id is sent, the client moves to the `ok` state. This happens after onClient is
 	# called (so onClient can send messages to the client immediately).
-	'A client has state=ok after onClient returns': (test) ->
-		@post '/channel/bind?VER=8&RID=1000&t=1', 'count=0', (res) =>
-		@onClient = (client) ->
-			process.nextTick ->
-				test.strictEqual client.state, 'ok'
-				test.done()
+	#
+	# I'm starting to use the @connect method here, which just POSTs locally to create a session, sets @client and
+	# calls its callback.
+	'A client has state=ok after onClient returns': (test) -> @connect ->
+		process.nextTick =>
+			test.strictEqual @client.state, 'ok'
+			test.done()
 
 	# The CVER= property is optional during client connections. If its left out, client.appVersion is
 	# null.
@@ -464,7 +489,7 @@ module.exports = testCase
 		@post '/channel/bind?VER=8&RID=1000&t=1', 'count=1&ofs=0&req0_k=v', (res) =>
 	
 	# The data received by the server should be properly URL decoded and whatnot.
-	'The client can post messages to the server during initialization': (test) ->
+	'Messages to the client are properly URL decoded': (test) ->
 		@onClient = (client) ->
 			client.on 'map', (data) ->
 				test.deepEqual data, {"_int_^&^%#net":'hi"there&&\nsam'}
@@ -479,53 +504,44 @@ module.exports = testCase
 	# The data looks like this:
 	#
 	# count=5&ofs=1000&req0_KEY1=VAL1&req0_KEY2=VAL2&req1_KEY3=req1_VAL3&...
-	'The client can post messages to the server after initialization': (test) ->
-		@post '/channel/bind?VER=8&RID=1000&t=1', 'count=0', (res) =>
+	'The client can post messages to the server after initialization': (test) -> @connect ->
+		@client.on 'map', (data) ->
+			test.deepEqual data, {k:'v'}
+			test.done()
 
-		@onClient = (client) =>
-			client.on 'map', (data) ->
-				test.deepEqual data, {k:'v'}
-				test.done()
-
-			@post "/channel/bind?VER=8&RID=1001&SID=#{client.id}&AID=0", 'count=1&ofs=0&req0_k=v', (res) =>
+		@post "/channel/bind?VER=8&RID=1001&SID=#{@client.id}&AID=0", 'count=1&ofs=0&req0_k=v', (res) =>
 	
 	# When the server gets a forwardchannel request, it should reply with a little array saying whats
 	# going on.
-	'The server acknowledges forward channel messages correctly': (test) ->
-		@post '/channel/bind?VER=8&RID=1000&t=1', 'count=0', (res) =>
-
-		@onClient = (client) =>
-			@post "/channel/bind?VER=8&RID=1001&SID=#{client.id}&AID=0", 'count=1&ofs=0&req0_k=v', (res) =>
-				readLengthPrefixedJSON res, (data) =>
-					# The server responds with [backchannelMissing ? 0 : 1, lastSentAID, outstandingBytes]
-					test.deepEqual data, [0, 0, 0]
-					test.done()
+	'The server acknowledges forward channel messages correctly': (test) -> @connect ->
+		@post "/channel/bind?VER=8&RID=1001&SID=#{@client.id}&AID=0", 'count=1&ofs=0&req0_k=v', (res) =>
+			readLengthPrefixedJSON res, (data) =>
+				# The server responds with [backchannelMissing ? 0 : 1, lastSentAID, outstandingBytes]
+				test.deepEqual data, [0, 0, 0]
+				test.done()
 
 	# If the server has an active backchannel, it responds to forward channel requests notifying the client
 	# that the backchannel connection is alive and well.
-	'The server tells the client if the backchannel is alive': (test) ->
-		@post '/channel/bind?VER=8&RID=1000&t=1', 'count=0', (res) =>
+	'The server tells the client if the backchannel is alive': (test) -> @connect ->
+		# This will fire up a backchannel connection to the server.
+		req = @get "/channel/bind?VER=8&RID=rpc&SID=#{@client.id}&AID=0&TYPE=xmlhttp", (res) =>
+			# The client shouldn't get any data through the backchannel.
+			res.on 'data', -> throw new Error 'Should not get data through backchannel'
 
-		@onClient = (client) =>
-			# This will fire up a backchannel connection to the server.
-			req = @get "/channel/bind?VER=8&RID=rpc&SID=#{client.id}&AID=0&TYPE=xmlhttp", (res) =>
-				# The client shouldn't get any data through the backchannel.
-				res.on 'data', -> throw new Error 'Should not get data through backchannel'
-
-			# Unfortunately, the GET request is sent *after* the POST, so we have to wrap the
-			# post in a timeout to make sure it hits the server after the backchannel connection is
-			# established.
-			setTimeout =>
-					@post "/channel/bind?VER=8&RID=1001&SID=#{client.id}&AID=0", 'count=1&ofs=0&req0_k=v', (res) =>
-						readLengthPrefixedJSON res, (data) =>
-							# This time, we get a 1 as the first argument because the backchannel connection is
-							# established.
-							test.deepEqual data, [1, 0, 0]
-							# The backchannel hasn't gotten any data yet. It'll spend 15 seconds or so timing out
-							# if we don't abort it manually.
-							req.abort()
-							test.done()
-				, 50
+		# Unfortunately, the GET request is sent *after* the POST, so we have to wrap the
+		# post in a timeout to make sure it hits the server after the backchannel connection is
+		# established.
+		setTimeout =>
+				@post "/channel/bind?VER=8&RID=1001&SID=#{@client.id}&AID=0", 'count=1&ofs=0&req0_k=v', (res) =>
+					readLengthPrefixedJSON res, (data) =>
+						# This time, we get a 1 as the first argument because the backchannel connection is
+						# established.
+						test.deepEqual data, [1, 0, 0]
+						# The backchannel hasn't gotten any data yet. It'll spend 15 seconds or so timing out
+						# if we don't abort it manually.
+						req.abort()
+						test.done()
+			, 50
 	
 	# When the user calls send(), data is queued by the server and sent into the next backchannel connection.
 	#
@@ -541,111 +557,100 @@ module.exports = testCase
 				test.deepEqual data, [[0, ['c', @client.id, null, 8]], [1, testData]]
 				test.done()
 
-	'The server buffers data if no backchannel is available': (test) ->
-		@post '/channel/bind?VER=8&RID=1000&t=1', 'count=0', (res) =>
-
+	'The server buffers data if no backchannel is available': (test) -> @connect ->
 		testData = ['hello', 'there', null, 1000, {}, [], [555]]
-		@onClient = (@client) =>
-			# The first response to the server is sent after this method returns, so if we send the data
-			# in process.nextTick, it'll get buffered.
-			process.nextTick =>
-				@client.send testData
 
-				req = @get "/channel/bind?VER=8&RID=rpc&SID=#{client.id}&AID=0&TYPE=xmlhttp&CI=0", (res) =>
-					readLengthPrefixedJSON res, (data) =>
-						test.deepEqual data, [[1, testData]]
-						req.abort()
-						test.done()
-	
-	# This time, we'll fire up the back channel first (and give it time to get established) _then_
-	# send data through the client.
-	'The server returns data through the available backchannel when send is called later': (test) ->
-		@post '/channel/bind?VER=8&RID=1000&t=1', 'count=0', (res) =>
+		# The first response to the server is sent after this method returns, so if we send the data
+		# in process.nextTick, it'll get buffered.
+		process.nextTick =>
+			@client.send testData
 
-		testData = ['hello', 'there', null, 1000, {}, [], [555]]
-		@onClient = (client) =>
-			# Fire off the backchannel request as soon as the client has connected
-			req = @get "/channel/bind?VER=8&RID=rpc&SID=#{client.id}&AID=0&TYPE=xmlhttp&CI=0", (res) =>
-
-				#res.on 'data', (chunk) -> console.warn chunk.toString()
+			req = @get "/channel/bind?VER=8&RID=rpc&SID=#{@client.id}&AID=0&TYPE=xmlhttp&CI=0", (res) =>
 				readLengthPrefixedJSON res, (data) =>
 					test.deepEqual data, [[1, testData]]
 					req.abort()
 					test.done()
+	
+	# This time, we'll fire up the back channel first (and give it time to get established) _then_
+	# send data through the client.
+	'The server returns data through the available backchannel when send is called later': (test) -> @connect ->
+		testData = ['hello', 'there', null, 1000, {}, [], [555]]
 
-			# Send the data outside of the get block to make sure it makes it through.
-			setTimeout (-> client.send testData), 50
+		# Fire off the backchannel request as soon as the client has connected
+		req = @get "/channel/bind?VER=8&RID=rpc&SID=#{@client.id}&AID=0&TYPE=xmlhttp&CI=0", (res) ->
+
+			#res.on 'data', (chunk) -> console.warn chunk.toString()
+			readLengthPrefixedJSON res, (data) ->
+				test.deepEqual data, [[1, testData]]
+				req.abort()
+				test.done()
+
+		# Send the data outside of the get block to make sure it makes it through.
+		setTimeout (=> @client.send testData), 50
 	
 	# The server should call the send callback once the data has been confirmed by the client.
 	#
 	# We'll try sending three messages to the client. The first message will be sent during init and the
 	# third message will not be acknowledged. Only the first two message callbacks should get called.
-	'The server calls send callback once data is acknowledged': (test) ->
-		@post '/channel/bind?VER=8&RID=1000&t=1', 'count=0', (res) =>
-
+	'The server calls send callback once data is acknowledged': (test) -> @connect ->
 		lastAck = null
 
-		@onClient = (client) =>
-			client.send [1], ->
-				test.strictEqual lastAck, null
-				lastAck = 1
+		@client.send [1], ->
+			test.strictEqual lastAck, null
+			lastAck = 1
 
-			process.nextTick =>
-				client.send [2], ->
-					test.strictEqual lastAck, 1
-					# I want to give the test time to die
-					setTimeout (-> test.done()), 50
+		process.nextTick =>
+			@client.send [2], ->
+				test.strictEqual lastAck, 1
+				# I want to give the test time to die
+				setTimeout (-> test.done()), 50
 
-				# This callback should actually get called with an error after the client times out.
-				client.send [3], -> throw new Error 'Should not call unacknowledged client callback'
+			# This callback should actually get called with an error after the client times out.
+			@client.send [3], -> throw new Error 'Should not call unacknowledged client callback'
 
-				req = @get "/channel/bind?VER=8&RID=rpc&SID=#{client.id}&AID=1&TYPE=xmlhttp&CI=0", (res) =>
-					readLengthPrefixedJSON res, (data) =>
-						test.deepEqual data, [[2, [2]], [3, [3]]]
+			req = @get "/channel/bind?VER=8&RID=rpc&SID=#{@client.id}&AID=1&TYPE=xmlhttp&CI=0", (res) =>
+				readLengthPrefixedJSON res, (data) =>
+					test.deepEqual data, [[2, [2]], [3, [3]]]
 
-						# Ok, now we'll only acknowledge the second message by sending dummy client data.
-						@post "/channel/bind?VER=8&RID=1001&SID=#{client.id}&AID=2", 'count=0', (res) =>
-							req.abort()
+					# Ok, now we'll only acknowledge the second message by sending dummy client data.
+					@post "/channel/bind?VER=8&RID=1001&SID=#{@client.id}&AID=2", 'count=0', (res) =>
+						req.abort()
 
 	# If there's a proxy in the way which chunks up responses before sending them on, the client adds a
 	# &CI=1 argument on the backchannel. This causes the server to end the HTTP query after each message
 	# is sent, so the data is sent to the client.
-	'The backchannel is closed after each packet if chunking is turned off': (test) ->
-		@post '/channel/bind?VER=8&RID=1000&t=1', 'count=0', (res) =>
-
+	'The backchannel is closed after each packet if chunking is turned off': (test) -> @connect ->
 		testData = ['hello', 'there', null, 1000, {}, [], [555]]
-		@onClient = (@client) =>
-			process.nextTick =>
-				@client.send testData
 
-				# Instead of the usual CI=0 we're passing CI=1 here.
-				@get "/channel/bind?VER=8&RID=rpc&SID=#{client.id}&AID=0&TYPE=xmlhttp&CI=1", (res) =>
-					readLengthPrefixedJSON res, (data) =>
-						test.deepEqual data, [[1, testData]]
+		process.nextTick =>
+			@client.send testData
 
-					res.on 'end', -> test.done()
+			# Instead of the usual CI=0 we're passing CI=1 here.
+			@get "/channel/bind?VER=8&RID=rpc&SID=#{@client.id}&AID=0&TYPE=xmlhttp&CI=1", (res) =>
+				readLengthPrefixedJSON res, (data) =>
+					test.deepEqual data, [[1, testData]]
+
+				res.on 'end', -> test.done()
 
 	# Normally, the server doesn't close the connection after each backchannel message.
-	'The backchannel is left open if CI=0': (test) ->
-		@post '/channel/bind?VER=8&RID=1000&t=1', 'count=0', (res) =>
-
+	'The backchannel is left open if CI=0': (test) -> @connect ->
 		testData = ['hello', 'there', null, 1000, {}, [], [555]]
-		@onClient = (@client) =>
-			process.nextTick =>
-				@client.send testData
 
-				req = @get "/channel/bind?VER=8&RID=rpc&SID=#{client.id}&AID=0&TYPE=xmlhttp&CI=0", (res) =>
-					readLengthPrefixedJSON res, (data) =>
-						test.deepEqual data, [[1, testData]]
+		process.nextTick =>
+			@client.send testData
 
-					# After receiving the data, the client must not close the connection. (At least, not unless
-					# it times out naturally)
-					res.on 'end', -> throw new Error 'connection should have stayed open'
+			req = @get "/channel/bind?VER=8&RID=rpc&SID=#{@client.id}&AID=0&TYPE=xmlhttp&CI=0", (res) =>
+				readLengthPrefixedJSON res, (data) =>
+					test.deepEqual data, [[1, testData]]
 
-					setTimeout ->
-							req.abort()
-							test.done()
-						, 50
+				# After receiving the data, the client must not close the connection. (At least, not unless
+				# it times out naturally)
+				res.on 'end', -> throw new Error 'connection should have stayed open'
+
+				setTimeout ->
+						req.abort()
+						test.done()
+					, 50
 
 	# On IE, the data is all loaded using iframes. The backchannel spits out data using inline scripts
 	# in an HTML page.
@@ -653,89 +658,84 @@ module.exports = testCase
 	# I've written this test separately from the tests above, but it would really make more sense
 	# to rerun the same set of tests in both HTML and XHR modes to make sure the behaviour is correct
 	# in both instances.
-	'The server gives the client correctly formatted backchannel data if TYPE=html': (test) ->
-		@post '/channel/bind?VER=8&RID=1000&t=1', 'count=0', (res) =>
-
+	'The server gives the client correctly formatted backchannel data if TYPE=html': (test) -> @connect ->
 		testData = ['hello', 'there', null, 1000, {}, [], [555]]
-		@onClient = (@client) =>
-			process.nextTick =>
-				@client.send testData
 
-				# The type is specified as an argument here in the query string. For this test, I'm making
-				# CI=1, because the test is easier to write that way.
-				#
-				# In truth, I don't care about IE support as much as support for modern browsers. This might
-				# be a mistake.. I'm not sure. IE9's XHR support should work just fine for browserchannel,
-				# though google's BC client doesn't use it.
-				@get "/channel/bind?VER=8&RID=rpc&SID=#{client.id}&AID=0&TYPE=html&CI=1", (res) =>
-					expect res,
-						# Interestingly, google doesn't double-encode the string like this. Instead of turning
-						# quotes `"` into escaped quotes `\"`, it uses unicode encoding to turn them into \42 and
-						# stuff like that. I'm not sure why they do this - it produces the same effect in IE8.
-						# I should test it in IE6 and see if there's any problems.
-						"""<html><body><script>try {parent.m(#{JSON.stringify JSON.stringify([[1, testData]]) + '\n'})} catch(e) {}</script>
+		process.nextTick =>
+			@client.send testData
+
+			# The type is specified as an argument here in the query string. For this test, I'm making
+			# CI=1, because the test is easier to write that way.
+			#
+			# In truth, I don't care about IE support as much as support for modern browsers. This might
+			# be a mistake.. I'm not sure. IE9's XHR support should work just fine for browserchannel,
+			# though google's BC client doesn't use it.
+			@get "/channel/bind?VER=8&RID=rpc&SID=#{@client.id}&AID=0&TYPE=html&CI=1", (res) =>
+				expect res,
+					# Interestingly, google doesn't double-encode the string like this. Instead of turning
+					# quotes `"` into escaped quotes `\"`, it uses unicode encoding to turn them into \42 and
+					# stuff like that. I'm not sure why they do this - it produces the same effect in IE8.
+					# I should test it in IE6 and see if there's any problems.
+					"""<html><body><script>try {parent.m(#{JSON.stringify JSON.stringify([[1, testData]]) + '\n'})} catch(e) {}</script>
 #{ieJunk}<script>try  {parent.d(); }catch (e){}</script>\n""", =>
-							# Because I'm lazy, I'm going to chain on a test to make sure CI=0 works as well.
-							data2 = {other:'data'}
-							@client.send data2
-							# I'm setting AID=1 here to indicate that the client has seen array 1.
-							req = @get "/channel/bind?VER=8&RID=rpc&SID=#{client.id}&AID=1&TYPE=html&CI=0", (res) =>
-								expect res,
-									"""<html><body><script>try {parent.m(#{JSON.stringify JSON.stringify([[2, data2]]) + '\n'})} catch(e) {}</script>
+						# Because I'm lazy, I'm going to chain on a test to make sure CI=0 works as well.
+						data2 = {other:'data'}
+						@client.send data2
+						# I'm setting AID=1 here to indicate that the client has seen array 1.
+						req = @get "/channel/bind?VER=8&RID=rpc&SID=#{@client.id}&AID=1&TYPE=html&CI=0", (res) =>
+							expect res,
+								"""<html><body><script>try {parent.m(#{JSON.stringify JSON.stringify([[2, data2]]) + '\n'})} catch(e) {}</script>
 #{ieJunk}""", =>
-										req.abort()
-										test.done()
+									req.abort()
+									test.done()
 	
 	# If there's a basePrefix set, the returned HTML sets `document.domain = ` before sending messages.
 	# I'm super lazy, and just copy+pasting from the test above. There's probably a way to factor these tests
 	# nicely, but I'm not in the mood to figure it out at the moment.
-	'The server sets the domain if we have a domain set': (test) ->
-		@post '/channel/bind?VER=8&RID=1000&t=1', 'count=0', (res) =>
-
+	'The server sets the domain if we have a domain set': (test) -> @connect ->
 		testData = ['hello', 'there', null, 1000, {}, [], [555]]
-		@onClient = (@client) =>
-			process.nextTick =>
-				@client.send testData
-				# This time we're setting DOMAIN=X, and the response contains a document.domain= block. Woo.
-				@get "/channel/bind?VER=8&RID=rpc&SID=#{client.id}&AID=0&TYPE=html&CI=1&DOMAIN=foo.com", (res) =>
-					expect res,
-						"""<html><body><script>try{document.domain=\"foo.com\";}catch(e){}</script>
+
+		process.nextTick =>
+			@client.send testData
+			# This time we're setting DOMAIN=X, and the response contains a document.domain= block. Woo.
+			@get "/channel/bind?VER=8&RID=rpc&SID=#{@client.id}&AID=0&TYPE=html&CI=1&DOMAIN=foo.com", (res) =>
+				expect res,
+					"""<html><body><script>try{document.domain=\"foo.com\";}catch(e){}</script>
 <script>try {parent.m(#{JSON.stringify JSON.stringify([[1, testData]]) + '\n'})} catch(e) {}</script>
 #{ieJunk}<script>try  {parent.d(); }catch (e){}</script>\n""", =>
-							data2 = {other:'data'}
-							@client.send data2
-							req = @get "/channel/bind?VER=8&RID=rpc&SID=#{client.id}&AID=1&TYPE=html&CI=0&DOMAIN=foo.com", (res) =>
-								expect res,
-									# Its interesting - in the test channel, the ie junk comes right after the document.domain= line,
-									# but in a backchannel like this it comes after. The behaviour here is the same in google's version.
-									#
-									# I'm not sure if its actually significant though.
-									"""<html><body><script>try{document.domain=\"foo.com\";}catch(e){}</script>
+						data2 = {other:'data'}
+						@client.send data2
+						req = @get "/channel/bind?VER=8&RID=rpc&SID=#{@client.id}&AID=1&TYPE=html&CI=0&DOMAIN=foo.com", (res) =>
+							expect res,
+								# Its interesting - in the test channel, the ie junk comes right after the document.domain= line,
+								# but in a backchannel like this it comes after. The behaviour here is the same in google's version.
+								#
+								# I'm not sure if its actually significant though.
+								"""<html><body><script>try{document.domain=\"foo.com\";}catch(e){}</script>
 <script>try {parent.m(#{JSON.stringify JSON.stringify([[2, data2]]) + '\n'})} catch(e) {}</script>
 #{ieJunk}""", =>
-										req.abort()
-										test.done()
+									req.abort()
+									test.done()
 
 	# If a client thinks their backchannel connection is closed, they might open a second backchannel connection.
 	# In this case, the server should close the old one and resume sending stuff using the new connection.
-	'The server closes old backchannel connections': (test) ->
-		@post '/channel/bind?VER=8&RID=1000&t=1', 'count=0', (res) =>
+	'The server closes old backchannel connections': (test) -> @connect ->
 		testData = ['hello', 'there', null, 1000, {}, [], [555]]
-		@onClient = (@client) =>
-			process.nextTick =>
-				@client.send testData
 
-				# As usual, we'll get the sent data through the backchannel connection. The connection is kept open...
-				@get "/channel/bind?VER=8&RID=rpc&SID=#{client.id}&AID=0&TYPE=xmlhttp&CI=0", (res) =>
-					readLengthPrefixedJSON res, (data) =>
-						# ... and the data has been read. Now we'll open another connection and check that the first connection
-						# gets closed.
+		process.nextTick =>
+			@client.send testData
 
-						req2 = @get "/channel/bind?VER=8&RID=rpc&SID=#{client.id}&AID=1&TYPE=xmlhttp&CI=0", (res2) =>
+			# As usual, we'll get the sent data through the backchannel connection. The connection is kept open...
+			@get "/channel/bind?VER=8&RID=rpc&SID=#{@client.id}&AID=0&TYPE=xmlhttp&CI=0", (res) =>
+				readLengthPrefixedJSON res, (data) =>
+					# ... and the data has been read. Now we'll open another connection and check that the first connection
+					# gets closed.
 
-						res.on 'end', ->
-							req2.abort()
-							test.done()
+					req2 = @get "/channel/bind?VER=8&RID=rpc&SID=#{@client.id}&AID=1&TYPE=xmlhttp&CI=0", (res2) =>
+
+					res.on 'end', ->
+						req2.abort()
+						test.done()
 
 	# The client attaches a sequence number (*RID*) to every message, to make sure they don't end up out-of-order at
 	# the server's end.
@@ -743,69 +743,63 @@ module.exports = testCase
 	# We'll purposefully send some messages out of order and make sure they're held and passed through in order.
 	#
 	# Gogo gadget reimplementing TCP.
-	'The server orders forwardchannel messages correctly using RIDs': (test) ->
-		# The initial sequence number is 1000...
-		@post '/channel/bind?VER=8&RID=1000&t=1', 'count=0', (res) =>
+	'The server orders forwardchannel messages correctly using RIDs': (test) -> @connect ->
+		# @connect sets RID=1000.
 
 		# We'll send 2 maps, the first one will be {v:1} then {v:0}. They should be swapped around by the server.
 		lastVal = 0
-		@onClient = (client) =>
-			client.on 'map', (map) ->
-				test.strictEqual map.v, "#{lastVal++}", 'messages arent reordered in the server'
-				test.done() if map.v == '2'
-		
-			# First, send `[{v:2}]`
-			@post "/channel/bind?VER=8&RID=1002&SID=#{client.id}&AID=0", 'count=1&ofs=2&req0_v=2', (res) =>
-			# ... then `[{v:0}, {v:1}]` a few MS later.
-			setTimeout =>
-					@post "/channel/bind?VER=8&RID=1001&SID=#{client.id}&AID=0", 'count=2&ofs=0&req0_v=0&req1_v=1', (res) =>
-				, 50
+
+		@client.on 'map', (map) ->
+			test.strictEqual map.v, "#{lastVal++}", 'messages arent reordered in the server'
+			test.done() if map.v == '2'
 	
-	'Repeated forward channel messages are discarded': (test) ->
-		@post '/channel/bind?VER=8&RID=1000&t=1', 'count=0', (res) =>
+		# First, send `[{v:2}]`
+		@post "/channel/bind?VER=8&RID=1002&SID=#{@client.id}&AID=0", 'count=1&ofs=2&req0_v=2', (res) =>
+		# ... then `[{v:0}, {v:1}]` a few MS later.
+		setTimeout =>
+				@post "/channel/bind?VER=8&RID=1001&SID=#{@client.id}&AID=0", 'count=2&ofs=0&req0_v=0&req1_v=1', (res) =>
+			, 50
+	
+	# Again, think of browserchannel as TCP on top of UDP...
+	'Repeated forward channel messages are discarded': (test) -> @connect ->
+		gotMessage = false
+		# The map must only be received once.
+		@client.on 'map', (map) ->
+			if gotMessage == false
+				gotMessage = true
+			else
+				throw new Error 'got map twice'
+	
+		# POST the maps twice.
+		@post "/channel/bind?VER=8&RID=1001&SID=#{@client.id}&AID=0", 'count=1&ofs=0&req0_v=0', (res) =>
+		@post "/channel/bind?VER=8&RID=1001&SID=#{@client.id}&AID=0", 'count=1&ofs=0&req0_v=0', (res) =>
 
-		@onClient = (client) =>
-			gotMessage = false
-			# The map must only be received once.
-			client.on 'map', (map) ->
-				if gotMessage == false
-					gotMessage = true
-				else
-					throw new Error 'got map twice'
-		
-			# POST the maps twice.
-			@post "/channel/bind?VER=8&RID=1001&SID=#{client.id}&AID=0", 'count=1&ofs=0&req0_v=0', (res) =>
-			@post "/channel/bind?VER=8&RID=1001&SID=#{client.id}&AID=0", 'count=1&ofs=0&req0_v=0', (res) =>
-
-			# Wait 50 milliseconds for the map to (maybe!) be received twice, then pass.
-			setTimeout ->
-					test.strictEqual gotMessage, true
-					test.done()
-				, 50
+		# Wait 50 milliseconds for the map to (maybe!) be received twice, then pass.
+		setTimeout ->
+				test.strictEqual gotMessage, true
+				test.done()
+			, 50
 
 	# With each request to the server, the client tells the server what array it saw last through the AID= parameter.
 	#
 	# If a client sends a subsequent backchannel request with an old AID= set, that means the client never saw the arrays
 	# the server has previously sent. So, the server should resend them.
-	'The server resends lost arrays if the client asks for them': (test) ->
-		@post '/channel/bind?VER=8&RID=1000&t=1', 'count=0', (res) =>
+	'The server resends lost arrays if the client asks for them': (test) -> @connect ->
+		process.nextTick =>
+			@client.send [1,2,3]
+			@client.send [4,5,6]
 
-		@onClient = (client) =>
-			process.nextTick =>
-				client.send [1,2,3]
-				client.send [4,5,6]
+			@get "/channel/bind?VER=8&RID=rpc&SID=#{@client.id}&AID=0&TYPE=xmlhttp&CI=0", (res) =>
+				readLengthPrefixedJSON res, (data) =>
+					test.deepEqual data, [[1, [1,2,3]], [2, [4,5,6]]]
 
-				@get "/channel/bind?VER=8&RID=rpc&SID=#{client.id}&AID=0&TYPE=xmlhttp&CI=0", (res) =>
-					readLengthPrefixedJSON res, (data) =>
-						test.deepEqual data, [[1, [1,2,3]], [2, [4,5,6]]]
-
-						# We'll resend that request, pretending that the client never saw the second array sent (`[4,5,6]`)
-						req = @get "/channel/bind?VER=8&RID=rpc&SID=#{client.id}&AID=1&TYPE=xmlhttp&CI=0", (res) =>
-							readLengthPrefixedJSON res, (data) =>
-								test.deepEqual data, [[2, [4,5,6]]]
-								# We don't need to abort the first connection because the server should close it.
-								req.abort()
-								test.done()
+					# We'll resend that request, pretending that the client never saw the second array sent (`[4,5,6]`)
+					req = @get "/channel/bind?VER=8&RID=rpc&SID=#{@client.id}&AID=1&TYPE=xmlhttp&CI=0", (res) =>
+						readLengthPrefixedJSON res, (data) =>
+							test.deepEqual data, [[2, [4,5,6]]]
+							# We don't need to abort the first connection because the server should close it.
+							req.abort()
+							test.done()
 
 	# If you sleep your laptop or something, by the time you open it again the server could have timed out your session
 	# so your session ID is invalid. This will also happen if the server gets restarted or something like that.
@@ -863,163 +857,147 @@ module.exports = testCase
 			test.ok client
 			test.done()
 
-	'The server uses OAID to confirm arrays in the old session before closing it': (test) ->
-		@post '/channel/bind?VER=8&RID=1000&t=1', 'count=0', (res) =>
-		
+	# OAID is set in the ghosted connection as a final attempt to flush arrays.
+	'The server uses OAID to confirm arrays in the old session before closing it': (test) -> @connect ->
 		# We'll follow the same pattern as the first callback test waay above. We'll send three messages, one
 		# in the first callback and two after. We'll pretend that just the first two messages made it through.
 		lastMessage = null
-		@onClient = (client) =>
-			# We'll create a new client in a moment, and I don't want this function called again.
-			@onClient = ->
 
-			client.send 1, (error) ->
+		# We'll create a new client in a moment, so its fine if another client gets made.
+		@onClient = ->
+
+		@client.send 1, (error) ->
+			test.ifError error
+			test.strictEqual lastMessage, null
+			lastMessage = 1
+
+		# The final message callback should get called after the close event fires
+		@client.on 'close', ->
+			test.strictEqual lastMessage, 2
+
+		process.nextTick =>
+			@client.send 2, (error) ->
 				test.ifError error
-				test.strictEqual lastMessage, null
-				lastMessage = 1
+				test.strictEqual lastMessage, 1
+				lastMessage = 2
 
-			# The final message callback should get called after the close event fires
-			client.on 'close', ->
+			@client.send 3, (error) ->
+				test.ok error
 				test.strictEqual lastMessage, 2
+				lastMessage = 3
+				test.strictEqual error.message, 'Reconnected'
 
-			process.nextTick =>
-				client.send 2, (error) ->
-					test.ifError error
-					test.strictEqual lastMessage, 1
-					lastMessage = 2
+				setTimeout (-> req.abort(); test.done()), 50
 
-				client.send 3, (error) ->
-					test.ok error
-					test.strictEqual lastMessage, 2
-					lastMessage = 3
-					test.strictEqual error.message, 'Reconnected'
+			# And now we'll nuke the session and confirm the first two arrays. But first, its important
+			# the client has a backchannel to send data to (confirming arrays before a backchannel is opened
+			# to receive them is undefined and probably does something bad)
+			req = @get "/channel/bind?VER=8&RID=rpc&SID=#{@client.id}&AID=1&TYPE=xmlhttp&CI=0", (res) =>
 
-					setTimeout (-> req.abort(); test.done()), 50
+			@post "/channel/bind?VER=8&RID=2000&t=1&OSID=#{@client.id}&OAID=2", 'count=0', (res) =>
 
-				# And now we'll nuke the session and confirm the first two arrays. But first, its important
-				# the client has a backchannel to send data to (confirming arrays before a backchannel is opened
-				# to receive them is undefined and probably does something bad)
-				req = @get "/channel/bind?VER=8&RID=rpc&SID=#{client.id}&AID=1&TYPE=xmlhttp&CI=0", (res) =>
+	'The client times out after awhile if it doesnt have a backchannel': (test) -> @connect ->
+		start = timer.Date.now()
+		@client.on 'close', (reason) ->
+			test.strictEqual reason, 'Timed out'
+			# It should take at least 30 seconds.
+			test.ok timer.Date.now() - start >= 30000
+			test.done()
 
-				@post "/channel/bind?VER=8&RID=2000&t=1&OSID=#{client.id}&OAID=2", 'count=0', (res) =>
-
-	'The client times out after awhile if it doesnt have a backchannel': (test) ->
-		@post '/channel/bind?VER=8&RID=1000&t=1', 'count=0', (res) =>
-
-		@onClient = (client) =>
-			start = timer.Date.now()
-			client.on 'close', (reason) ->
-				test.strictEqual reason, 'Timed out'
-				# It should take at least 30 seconds.
-				test.ok timer.Date.now() - start >= 30000
-				test.done()
-
-			timer.waitAll()
+		timer.waitAll()
 
 	# There's a slightly different codepath after a backchannel is opened then closed again. I want to make
 	# sure it still works in this case.
-	'The client times out if its backchannel is closed': (test) ->
-		@post '/channel/bind?VER=8&RID=1000&t=1', 'count=0', (res) =>
+	# 
+	# Its surprising how often this test fails.
+	'The client times out if its backchannel is closed': (test) -> @connect ->
+		process.nextTick =>
+			req = @get "/channel/bind?VER=8&RID=rpc&SID=#{@client.id}&AID=0&TYPE=xmlhttp&CI=0", (res) =>
 
-		@onClient = (client) =>
-			process.nextTick =>
-				req = @get "/channel/bind?VER=8&RID=rpc&SID=#{client.id}&AID=0&TYPE=xmlhttp&CI=0", (res) =>
+			# I'll let the backchannel establish itself for a moment, and then nuke it.
+			setTimeout =>
+					req.abort()
+					# It should take about 30 seconds from now to timeout the connection.
+					start = timer.Date.now()
+					@client.on 'close', (reason) ->
+						test.strictEqual reason, 'Timed out'
+						test.ok timer.Date.now() - start >= 30000
+						test.done()
 
-				# I'll let the backchannel establish itself for a moment, and then nuke it.
-				setTimeout ->
-						req.abort()
-						# It should take about 30 seconds from now to timeout the connection.
-						start = timer.Date.now()
-						client.on 'close', (reason) ->
-							test.strictEqual reason, 'Timed out'
-							test.ok timer.Date.now() - start >= 30000
-							test.done()
-
-						# The timer sessionTimeout won't be queued up until after the abort() message makes it
-						# to the server. I hate all these delays, but its not easy to write this test without them.
-						setTimeout (-> timer.waitAll()), 50
-					, 50
+					# The timer sessionTimeout won't be queued up until after the abort() message makes it
+					# to the server. I hate all these delays, but its not easy to write this test without them.
+					setTimeout (-> timer.waitAll()), 50
+				, 50
 
 	# The server sends a little heartbeat across the backchannel every 20 seconds if there hasn't been
 	# any chatter anyway. This keeps the machines en route from evicting the backchannel connection.
-	# (Noop is ignored by the client.)
-	'A heartbeat is sent across the backchannel (by default) every 20 seconds': (test) ->
-		@post '/channel/bind?VER=8&RID=1000&t=1', 'count=0', (res) =>
+	# (noops are ignored by the client.)
+	'A heartbeat is sent across the backchannel (by default) every 20 seconds': (test) -> @connect ->
+		start = timer.Date.now()
 
-		@onClient = (client) =>
-			start = timer.Date.now()
+		process.nextTick =>
+			req = @get "/channel/bind?VER=8&RID=rpc&SID=#{@client.id}&AID=0&TYPE=xmlhttp&CI=0", (res) =>
+				readLengthPrefixedJSON res, (msg) ->
+					test.deepEqual msg, [[1, ['noop']]]
+					test.ok timer.Date.now() - start >= 20000
+					req.abort()
+					test.done()
 
-			process.nextTick =>
-				req = @get "/channel/bind?VER=8&RID=rpc&SID=#{client.id}&AID=0&TYPE=xmlhttp&CI=0", (res) =>
-					readLengthPrefixedJSON res, (msg) ->
-						test.deepEqual msg, [[1, ['noop']]]
-						test.ok timer.Date.now() - start >= 20000
-						req.abort()
-						test.done()
-
-				# Once again, we can't call waitAll() until the request has hit the server.
-				setTimeout (-> timer.waitAll()), 50
+			# Once again, we can't call waitAll() until the request has hit the server.
+			setTimeout (-> timer.waitAll()), 50
 
 	# The send callback should be called _no matter what_. That means if a connection times out, it should
 	# still be called, but we'll pass an error into the callback.
 	'The server calls send callbacks with an error':
-		'when the client times out': (test) ->
-			@post '/channel/bind?VER=8&RID=1000&t=1', 'count=0', (res) =>
+		'when the client times out': (test) -> @connect ->
+			# It seems like this message shouldn't give an error, but it does because the client never confirms that
+			# its received it.
+			@client.send 'hello there', (error) ->
+				test.ok error
+				test.strictEqual error.message, 'Timed out'
 
-			@onClient = (client) =>
-				# It seems like this message shouldn't give an error, but it does because the client never confirms that
-				# its received it.
-				client.send 'hello there', (error) ->
+			process.nextTick =>
+				@client.send 'Another message', (error) ->
 					test.ok error
 					test.strictEqual error.message, 'Timed out'
+					test.expect 4
+					test.done()
 
-				process.nextTick ->
-					client.send 'Another message', (error) ->
-						test.ok error
-						test.strictEqual error.message, 'Timed out'
-						test.expect 4
-						test.done()
+				timer.waitAll()
 
-					timer.waitAll()
+		'when the client is ghosted': (test) -> @connect ->
+			# As soon as the client has connected, we'll fire off a new connection claiming the previous session is old.
+			@post "/channel/bind?VER=8&RID=2000&t=1&OSID=#{@client.id}&OAID=0", 'count=0', (res) =>
 
-		'when the client is ghosted': (test) ->
-			@post '/channel/bind?VER=8&RID=1000&t=1', 'count=0', (res) =>
+			@client.send 'hello there', (error) ->
+				test.ok error
+				test.strictEqual error.message, 'Reconnected'
 
-			@onClient = (client) =>
-				# As soon as the client has connected, we'll fire off a new connection claiming the previous session is old.
-				@post "/channel/bind?VER=8&RID=2000&t=1&OSID=#{client.id}&OAID=0", 'count=0', (res) =>
-
-				client.send 'hello there', (error) ->
+			process.nextTick =>
+				@client.send 'hi', (error) ->
 					test.ok error
 					test.strictEqual error.message, 'Reconnected'
+					test.expect 4
+					test.done()
 
-				process.nextTick ->
-					client.send 'hi', (error) ->
-						test.ok error
-						test.strictEqual error.message, 'Reconnected'
-						test.expect 4
-						test.done()
-
-				# Ignore the subsequent connection attempt
-				@onClient = ->
+			# Ignore the subsequent connection attempt
+			@onClient = ->
 
 		# The server can also abandon a connection by calling .abort(). Again, this should trigger error callbacks.
-		'when the client is aborted by the server': (test) ->
-			@post '/channel/bind?VER=8&RID=1000&t=1', 'count=0', (res) =>
+		'when the client is aborted by the server': (test) -> @connect ->
 
-			@onClient = (client) =>
-				client.send 'hello there', (error) ->
+			@client.send 'hello there', (error) ->
+				test.ok error
+				test.strictEqual error.message, 'foo'
+
+			process.nextTick =>
+				@client.send 'hi', (error) ->
 					test.ok error
 					test.strictEqual error.message, 'foo'
+					test.expect 4
+					test.done()
 
-				process.nextTick ->
-					client.send 'hi', (error) ->
-						test.ok error
-						test.strictEqual error.message, 'foo'
-						test.expect 4
-						test.done()
-
-					client.abort 'foo'
+				@client.abort 'foo'
 
 	# Close() is the API for 'stop trying to connect - something is wrong'. This triggers a STOP error in the
 	# client.
@@ -1032,28 +1010,25 @@ module.exports = testCase
 					test.done()
 
 			@onClient = (@client) =>
-				client.close()
+				@client.close()
 
 				@client.on 'close', (message) ->
 					test.strictEqual message, 'Closed'
 
-		'after init': (test) ->
-			@post '/channel/bind?VER=8&RID=1000&t=1', 'count=0', (res) =>
+		'after init': (test) -> @connect ->
+			# The stop message will be sent in the back channel. Once the server has sent stop, it should
+			# close the backchannel. so we can use buffer to  and trigger on 'close'.
+			@get "/channel/bind?VER=8&RID=rpc&SID=#{@client.id}&AID=0&TYPE=xmlhttp&CI=0", (res) =>
+				readLengthPrefixedJSON res, (data) ->
+					test.deepEqual data, [[1, ['stop']]]
 
-			@onClient = (client) ->
-				# The stop message will be sent in the back channel. Once the server has sent stop, it should
-				# close the backchannel. so we can use buffer to  and trigger on 'close'.
-				@get "/channel/bind?VER=8&RID=rpc&SID=#{client.id}&AID=0&TYPE=xmlhttp&CI=0", (res) =>
-					readLengthPrefixedJSON res, (data) ->
-						test.deepEqual data, [[1, ['stop']]]
+					res.on 'end', ->
+						test.done()
 
-						res.on 'end', ->
-							test.done()
+			setTimeout (=> @client.close()), 50
 
-				setTimeout (-> client.close()), 50
-
-				client.on 'close', (message) ->
-					test.strictEqual message, 'Closed'
+			@client.on 'close', (message) ->
+				test.strictEqual message, 'Closed'
 
 	'An invalid SID is sent correctly when type=HTML': (test) -> test.done()
 
