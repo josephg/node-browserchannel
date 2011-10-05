@@ -408,8 +408,8 @@ module.exports = testCase
 		'phase 2, no version, xmlhttp': check400 '/channel/test?TYPE=xmlhttp'
 		# For HTTP connections (IE), the error is sent a different way. Its kinda complicated how the error
 		# is sent back, so for now I'm just going to ignore checking it.
-		#`'phase 2, ver 7, http': check400 '/channel/test?VER=7&TYPE=html'`
-		#`'phase 2, no version, http': check400 '/channel/test?TYPE=html'`
+		'phase 2, ver 7, http': check400 '/channel/test?VER=7&TYPE=html'
+		'phase 2, no version, http': check400 '/channel/test?TYPE=html'
 	
 	# > At the moment the server expects the client will add a zx=###### query parameter to all requests.
 	# The server isn't strict about this, so I'll ignore it in the tests for now.
@@ -818,7 +818,9 @@ module.exports = testCase
 
 		'backChannel': (test) -> @get "/channel/bind?VER=8&RID=rpc&SID=madeup&AID=0&TYPE=xmlhttp&CI=0", testResponse(test)
 		'forwardChannel': (test) -> @post "/channel/bind?VER=8&RID=1001&SID=junkyjunk&AID=0", 'count=0', testResponse(test)
-
+		# When type=HTML, google's servers still send the same response back to the client. I'm not sure how it detects
+		# the error, but it seems to work. So, I'll copy that behaviour.
+		'backChannel with TYPE=html': (test) -> @get "/channel/bind?VER=8&RID=rpc&SID=madeup&AID=0&TYPE=html&CI=0", testResponse(test)
 	# When a client connects, it can optionally specify its old session ID and array ID. This solves the old IRC
 	# ghosting problem - if the old session hasn't timed out on the server yet, you can temporarily be in a state where
 	# multiple connections represent the same user.
@@ -1029,8 +1031,6 @@ module.exports = testCase
 
 			@client.on 'close', (message) ->
 				test.strictEqual message, 'Closed'
-
-	'An invalid SID is sent correctly when type=HTML': (test) -> test.done()
 
 	'After close() is called, no maps are emitted by the client': (test) -> test.done()
 

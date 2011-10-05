@@ -127,7 +127,7 @@ messagingMethods = (query, res) ->
 				res.end "<script>try  {parent.d(); }catch (e){}</script>\n"
 
 			# This is a helper method for signalling an error in the request back to the client.
-			signalError: (statusCode, message) ->
+			writeError: (statusCode, message) ->
 				# The HTML (iframe) handler has no way to discover that the embedded script tag
 				# didn't complete successfully. To signal errors, we return **200 OK** and call an
 				# exposed rpcClose() method on the page.
@@ -147,9 +147,18 @@ messagingMethods = (query, res) ->
 		write: (data) -> res.write "#{data.length}\n#{data}"
 		writeRaw: (data) -> res.write data
 		end: -> res.end()
-		signalError: (statusCode, message) ->
+		writeError: (statusCode, message) ->
 			res.writeHead statusCode, standardHeaders
 			res.end message
+
+# For telling the client its done bad.
+#
+# It turns out google's server isn't particularly fussy about signalling errors using the proper
+# html RPC stuff, so this is useful for html connections too.
+sendError = (res, statusCode, message) ->
+	res.writeHead statusCode, message
+	res.end "<html><body><h1>#{message}</h1></body></html>"
+	return
 
 # ## Parsing client maps from the forward channel
 #
@@ -569,7 +578,7 @@ module.exports = browserChannel = (options, onConnect) ->
 		#console.warn req.method, req.url
 		return next() if pathname.substring(0, base.length) != base
 
-		{writeHead, write, writeRaw, end, signalError} = messagingMethods query, res
+		{writeHead, write, writeRaw, end, writeError} = messagingMethods query, res
 
 		# # Connection testing
 		#
@@ -580,7 +589,7 @@ module.exports = browserChannel = (options, onConnect) ->
 		if pathname == "#{base}/test"
 			# This server only supports browserchannel protocol version **8**.
 			# I have no idea if 400 is the right error here.
-			return signalError 400, 'Only version 8 is supported' unless query.VER is '8'
+			return sendError res, 400, 'Version 8 required' unless query.VER is '8'
 
 			#### Phase 1: Server info
 			# The client is requests host prefixes. The server responds with an array of
@@ -627,7 +636,9 @@ module.exports = browserChannel = (options, onConnect) ->
 		#   hanging **GET** request. If chunking is disallowed (ie, if the proxy buffers)
 		#   then the back channel is closed after each server message.
 		else if pathname == "#{base}/bind"
-			return signalError 400, 'Only version 8 is supported' unless query.VER is '8'
+			# I'm copying the behaviour of unknown SIDs below. I don't know how the client
+			# is supposed to detect this error, but, eh. The other choice is to `return writeError ...`
+			return sendError res, 400, 'Version 8 required' unless query.VER is '8'
 
 			# All browserchannel connections have an associated client object. A client
 			# is created immediately if the connection is new.
@@ -637,7 +648,14 @@ module.exports = browserChannel = (options, onConnect) ->
 				# connection request and reconnect.
 				#
 				# I've put quotes around this because it gets JSON.parse'd.
-				return signalError '400', '"Error: Unknown SID"' unless client?
+				#
+				# For some reason, google replies with the same response on HTTP and HTML requests here.
+				# I'll follow suit, though its a little weird. Maybe I should do the same with all client
+				# errors?
+				unless client?
+					res.writeHead 400, 'Unknown SID', standardHeaders
+					res.end '<html><body>Unknown SID'
+					return
 
 			client.acknowledgedArrays query.AID if query.AID? and client
 
