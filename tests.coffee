@@ -421,6 +421,15 @@ module.exports = testCase
 				test.strictEqual data, "#{expected.length}\n#{expected}"
 				test.expect 5
 				test.done()
+	
+	# Once a client's session id is sent, the client moves to the `ok` state. This happens after onClient is
+	# called (so onClient can send messages to the client immediately).
+	'A client has state=ok after onClient returns': (test) ->
+		@post '/channel/bind?VER=8&RID=1000&t=1', 'count=0', (res) =>
+		@onClient = (client) ->
+			process.nextTick ->
+				test.strictEqual client.state, 'ok'
+				test.done()
 
 	# The CVER= property is optional during client connections. If its left out, client.appVersion is
 	# null.
@@ -717,19 +726,103 @@ module.exports = testCase
 					@post "/channel/bind?VER=8&RID=1001&SID=#{client.id}&AID=0", 'count=2&ofs=0&req0_v=0&req1_v=1', (res) =>
 				, 50
 	
-	'Repeated forward channel messages are discarded': (test) -> test.done()
+	'Repeated forward channel messages are discarded': (test) ->
+		@post '/channel/bind?VER=8&RID=1000&t=1', 'count=0', (res) =>
 
-	'The server resends lost arrays if the client asks for them': (test) -> test.done()
+		@onClient = (client) =>
+			gotMessage = false
+			# The map must only be received once.
+			client.on 'map', (map) ->
+				if gotMessage == false
+					gotMessage = true
+				else
+					throw new Error 'got map twice'
+		
+			# POST the maps twice.
+			@post "/channel/bind?VER=8&RID=1001&SID=#{client.id}&AID=0", 'count=1&ofs=0&req0_v=0', (res) =>
+			@post "/channel/bind?VER=8&RID=1001&SID=#{client.id}&AID=0", 'count=1&ofs=0&req0_v=0', (res) =>
 
-	'If a client disconnects then reconnects, specifying OSID= and OAID=, the local client doesnt notice': (test) -> test.done()
+			# Wait 50 milliseconds for the map to (maybe!) be received twice, then pass.
+			setTimeout ->
+					test.strictEqual gotMessage, true
+					test.done()
+				, 50
 
-	'If a client reconnects, the server resends any messages the client did not receive': (test) -> test.done()
+	# With each request to the server, the client tells the server what array it saw last through the AID= parameter.
+	#
+	# If a client sends a subsequent backchannel request with an old AID= set, that means the client never saw the arrays
+	# the server has previously sent. So, the server should resend them.
+	'The server resends lost arrays if the client asks for them': (test) ->
+		@post '/channel/bind?VER=8&RID=1000&t=1', 'count=0', (res) =>
 
-	'client.stop() sends stop to a client': (test) -> test.done()
+		@onClient = (client) =>
+			process.nextTick =>
+				client.send [1,2,3]
+				client.send [4,5,6]
 
-	'After stop() is called, no maps are emitted by the client': (test) -> test.done()
+				@get "/channel/bind?VER=8&RID=rpc&SID=#{client.id}&AID=0&TYPE=xmlhttp&CI=0", (res) =>
+					readLengthPrefixedJSON res, (data) =>
+						test.deepEqual data, [[1, [1,2,3]], [2, [4,5,6]]]
 
-	'client.close() makes subsequent client messages return an error': (test) -> test.done()
+						# We'll resend that request, pretending that the client never saw the second array sent (`[4,5,6]`)
+						req = @get "/channel/bind?VER=8&RID=rpc&SID=#{client.id}&AID=1&TYPE=xmlhttp&CI=0", (res) =>
+							readLengthPrefixedJSON res, (data) =>
+								test.deepEqual data, [[2, [4,5,6]]]
+								# We don't need to abort the first connection because the server should close it.
+								req.abort()
+								test.done()
+
+	# When a client connects, it can optionally specify its old session ID and array ID. This solves the old IRC
+	# ghosting problem - if the old session hasn't timed out on the server yet, you can temporarily be in a state where
+	# multiple connections represent the same user.
+	'If a client disconnects then reconnects, specifying OSID= and OAID=, the old session is destroyed': (test) ->
+		@post '/channel/bind?VER=8&RID=1000&t=1', 'count=0', (res) =>
+
+		# I want to check the following things:
+		#
+		# - on 'close' is called on the first client
+		# - onClient is called with the second client
+		# - on 'close' is called before the second client connects
+		#
+		# Its kinda gross managing all that state in one function...
+		@onClient = (client1) =>
+			# As soon as the client has connected, we'll fire off a new connection claiming the previous session is old.
+			@post "/channel/bind?VER=8&RID=2000&t=1&OSID=#{client1.id}&OAID=0", 'count=0', (res) =>
+
+			c1Closed = false
+			client1.on 'close', ->
+				c1Closed = true
+
+			# Once the first client has connected, I'm replacing @onClient so the second client's state can be handled
+			# separately.
+			@onClient = (client2) ->
+				test.ok c1Closed
+				test.strictEqual client1.state, 'closed'
+
+				test.done()
+
+###
+	'The server ignores OSID and OAID if the named session doesnt exist': (test) -> test.done()
+
+	'If a client sends an invalid SID in a request, the server responds with 400 Unknown SID': (test) -> test.done()
+
+	'The server uses OAID to confirm arrays in the old session before closing it': (test) -> test.done()
+
+	'The server calls send callbacks when the client confirms it has them': (test) -> test.done()
+
+	'The server calls send callbacks with an error when the client times out': (test) -> test.done()
+	'The server calls send callbacks with an error when the client is evicted': (test) -> test.done()
+	'The server calls send callbacks with an error when the client is aborted by the server': (test) -> test.done()
+
+	'Calling close() sends the stop command to the client': (test) -> test.done()
+
+	'After close() is called, no maps are emitted by the client': (test) -> test.done()
+
+	'Calling close() during the initial connection stops the client immediately': (test) -> test.done()
+
+	'Client.close() makes subsequent client messages return an error': (test) -> test.done()
+
+	'Client.abort() closes the connection': (test) -> test.done()
 
 	'The client times out after awhile': (test) -> test.done()
 
@@ -745,7 +838,7 @@ module.exports = testCase
 
 #server = connect browserChannel (client) ->
 #	if client.address != '127.0.0.1' or client.appVersion != '10'
-#		client.stop()
+#		client.close()
 #
 #	client.on 'map', (data) ->
 #		console.log data
@@ -754,9 +847,7 @@ module.exports = testCase
 #
 #	setInterval (-> client.send ['yo dawg']), 3000
 #
-#	client.on 'reconnected', (oldSessionId) ->
-#	
-#	client.on 'destroyed', ->
+#	client.on 'close', ->
 		# Clean up
 #server.listen(4321)
 
