@@ -340,6 +340,14 @@ module.exports = testCase
 			test.strictEqual response.statusCode, 404
 			test.done()
 
+	# For node-browserchannel, we also accept JSON in forward channel POST data. To tell the client that
+	# this is supported, we add an `X-Accept: application/json; application/x-www-form-urlencoded` header
+	# in phase 1 of the test API.
+	'The server sends accept:JSON header during test phase 1': (test) ->
+		@get '/channel/test?VER=8&MODE=init', (res) ->
+			test.strictEqual res.headers['x-accept'], 'application/json; application/x-www-form-urlencoded'
+			test.done()
+
 	# ## Testing phase 2
 	#
 	# I should really sort the above tests better.
@@ -418,6 +426,7 @@ module.exports = testCase
 		'phase 2, ver 7, http': check400 '/channel/test?VER=7&TYPE=html'
 		'phase 2, no version, http': check400 '/channel/test?TYPE=html'
 	
+
 	# > At the moment the server expects the client will add a zx=###### query parameter to all requests.
 	# The server isn't strict about this, so I'll ignore it in the tests for now.
 
@@ -1100,12 +1109,52 @@ module.exports = testCase
 
 		# Give it some time for the backchannel to establish itself
 		soon => @client.close()
+	
+	# # node-browserchannel extensions
+	#
+	# browserchannel by default only supports sending string->string maps from the client to server. This
+	# is really awful - I mean, maybe this is useful for some apps, but really you just want to send & receive
+	# JSON.
+	#
+	# To make everything nicer, I have two changes to browserchannel:
+	#
+	# - If a map is `{_JSON:"<JSON STRING>"}`, the server will automatically parse the JSON string and
+	#   emit 'message', object. In this case, the server *also* emits the data as a map.
+	# - The client can POST the forwardchannel data using a JSON blob. The message looks like this:
+	#
+	#     {ofs: 10, data:[null, {...}, 1000.4, 'hi', ....]}
+	#
+	#   In this case, the server *does not* emit a map, but merely emits the json object using emit 'message'.
+	#
+	#   To advertise this service, during the first test, the server sends X-Accept: application/json; ...
+	'The server decodes JSON data in a map if it has a _JSON key': (test) -> @connect ->
+		data = [{}, {'x':null}, 'hi', '!@#$%^&*()-=', '\'"']
+		qs = querystring.stringify count: 1, ofs: 0, req0__JSON: JSON.stringify data
+		# I can guarantee qs is awful.
+		@post "/channel/bind?VER=8&RID=1001&SID=#{@client.id}&AID=0", qs, (res) =>
 
-	'If a client times out, unacknowledged messages have an error callback called': (test) -> test.done()
+		@client.on 'message', (msg) ->
+			test.deepEqual msg, data
+			test.done()
 
-	'The server sends accept:JSON header': (test) -> test.done()
+	# The server might be JSON decoding the data, but it still needs to emit it as a map.
+	'The server emits JSON data in a map, as a map as well': (test) -> @connect ->
+		data = [{}, {'x':null}, 'hi', '!@#$%^&*()-=', '\'"']
+		qs = querystring.stringify count: 1, ofs: 0, req0__JSON: JSON.stringify data
+		@post "/channel/bind?VER=8&RID=1001&SID=#{@client.id}&AID=0", qs, (res) =>
 
-	'The server accepts JSON data': (test) -> test.done()
+		# I would prefer to have more tests mixing maps and JSON data. I'm better off testing that
+		# thoroughly using a randomized tester.
+		@client.on 'map', (map) ->
+			test.deepEqual map, _JSON: JSON.stringify data
+			test.done()
+
+	# The server also accepts raw JSON.
+	'The server accepts JSON data': (test) -> @connect ->
+		# The POST request has to specify Content-Type=application/json so we can't just use
+		# the @post request. (Big tears!)
+		#req = http.request {method:'POST', host:'localhost', path, @port}, callback
+		test.done()
 	
 	'Connecting with a version thats not 8 breaks': (test) -> test.done()
 

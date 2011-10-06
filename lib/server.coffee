@@ -175,11 +175,20 @@ bufferPostData = (req, callback) ->
 		data.push chunk.toString 'utf8'
 	req.on 'end', ->
 		data = data.join ''
-		callback querystring.parse data
+		callback data
 
-# Next, we'll need to decode the querystring-encoded maps into an array of objects.
+# Next, we'll need to decode the incoming client data into an array of objects.
 #
-# When this function is called, the data is in this form:
+# The data could be in two different forms:
+# 
+# - Classical browserchannel format, which is a bunch of string->string url-encoded maps
+# - A JSON object
+#
+# We can tell what format the data is in by inspecting the content-type header
+#
+# ## URL Encoded data
+#
+# Essentially, url encoded the data looks like this:
 #
 # ```
 # { count: '2',
@@ -192,29 +201,54 @@ bufferPostData = (req, callback) ->
 #
 # ... and we will return an object in the form of `[{x:'3', y:'10'}, {abc: 'def'}, ...]`
 #
-# I really wish they'd just used JSON. I guess this lets you submit forward channel
-# data using just a GET request if you really want to. I wonder if thats how early
-# versions of browserchannel worked...
-decodeMaps = (data) ->
-	count = parseInt data.count
-	throw new Error 'Invalid maps' unless count == 0 or (count > 0 and data.ofs?)
+# ## JSON Encoded data
+#
+# JSON encoded the data looks like:
+#
+# ```
+# { ofs: 0
+# , data: [null, {...}, 1000.4, 'hi', ...]
+# }
+# ```
+#
+# or `null` if there's no data.
+#
+# This function returns null if there's no data or {ofs, json:[...]} or {ofs, maps:[...]}
+decodeData = (req, data) ->
+	if req.headers['content-type'] == 'application/json'
+		data = JSON.parse data
+		return null if data is null # There's no data. This is a valid response.
 
-	maps = new Array count
+		# We'll restructure it slightly to mark the data as JSON rather than maps.
+		{ofs, data} = data
+		{ofs, json:data}
+	else
+		# Maps. Ugh.
+		data = querystring.parse data
+		count = parseInt data.count
+		return null if count is 0
 
-	# Scan through all the keys in the data. Every key of the form:
-	# `req123_xxx` will be used to populate its map.
-	regex = /^req(\d+)_(.+)$/
-	for key, val of data
-		match = regex.exec key
-		if match
-			id = match[1]
-			mapKey = match[2]
-			map = (maps[id] ||= {})
-			# The client uses `mapX_type=_badmap` to signify an error encoding a map.
-			continue if id == 'type' and mapKey == '_badmap'
-			map[mapKey] = val
+		# ofs will be missing if count is zero
+		ofs = parseInt data.ofs
+		throw new Error 'invalid map data' if isNaN count or isNaN ofs
+		throw new Error 'Invalid maps' unless count == 0 or (count > 0 and data.ofs?)
 
-	maps
+		maps = new Array count
+
+		# Scan through all the keys in the data. Every key of the form:
+		# `req123_xxx` will be used to populate its map.
+		regex = /^req(\d+)_(.+)$/
+		for key, val of data
+			match = regex.exec key
+			if match
+				id = match[1]
+				mapKey = match[2]
+				map = (maps[id] ||= {})
+				# The client uses `mapX_type=_badmap` to signify an error encoding a map.
+				continue if id == 'type' and mapKey == '_badmap'
+				map[mapKey] = val
+
+		{ofs, maps}
 
 # The server module returns a function, which you can call with your configuration
 # options. It returns your configured connect middleware, which is actually another function.
@@ -420,35 +454,60 @@ module.exports = browserChannel = (options, onConnect) ->
 		# We'll store the ID of the next map the server expects from the client.
 		client.nextMapId = 0
 
-		# We'll emit maps to the user immediately if they're in order, but if they're out of order
-		# we'll buffer them up in a dictionary. This will associate mapId -> [map] for maps which have been
-		# received but haven't been emitted yet. This is a sparse set.
+		# We'll emit client data to the user immediately if they're in order, but if they're out of order
+		# we'll buffer them up in a dictionary. This will associate id -> {maps:[map]} and id -> {json:[objs]}
+		# for client data which has been received but haven't been emitted yet. This is a sparse set.
 		#
 		# There's a potential DOS attack here whereby a client could just spam the server with
 		# out-of-order maps until it runs out of memory. We should probably dump a client if there are
-		# too many maps in this dictionary.
-		client.bufferedMaps = {}
+		# too many entries in this dictionary.
+		client.bufferedData = {}
 
 		# This method is called whenever we get maps from the client. Offset is the ID of the first
-		# map, and maps is an array containing the actual map data.
-		client.receivedMaps = (offset, maps) ->
-			# The server's response could have been lost in transit. In this case, we might get the maps
-			# sent to us twice. We can safely ignore any maps with id < nextMapId or resent maps which are
+		# map. The data could either be maps or JSON data. If its maps, data contains {maps} and if its
+		# JSON data, maps contains {JSON}.
+		client.receivedData = (data) ->
+			throw new Error 'No data' unless data.maps? or data.json?
+
+			# The server's response could have been lost in transit. In this case, we might get the data
+			# sent to us twice. We can safely ignore any data with id < nextMapId or data which is
 			# already buffered.
-			return if offset < @nextMapId or @bufferedMaps[offset]?
+			return if data.ofs < @nextMapId or @bufferedData[data.ofs]?
 
-			@bufferedMaps[offset] = maps
+			# This puts the offset in the @bufferedData map as well, but its not a big deal.
+			@bufferedData[data.ofs] = data
 
-			# Next flush any maps, if we can. Its a bit inefficient putting maps in a dictionary then
-			# removing them again, but not significantly... and the code is more elegant this way.
-			while (maps = @bufferedMaps[@nextMapId])?
-				# If an exception is thrown during this loop, I'm not really sure what the behaviour should be.
-				for map in maps
-					@emit 'map', map unless @state == 'stop'
+			# Next flush any data, if we can. Its a bit inefficient putting data in a dictionary then
+			# removing it again, but not significantly... and the code is more elegant this way.
+			while (data = @bufferedData[@nextMapId])?
+				# We iteratively pop the next data chunk off the bufferedData set.
+				delete @bufferedData[@nextMapId]
 
-				delete @bufferedMaps[@nextMapId]
+				# First, classic browserchannel maps.
+				if data.maps
+					# If an exception is thrown during this loop, I'm not really sure what the behaviour should be.
+					for map in data.maps
+						break if @state is 'closed'
 
-				@nextMapId += maps.length
+						@emit 'map', map
+
+						# If you specify the key as _JSON, the server will try to decode JSON data from the map and emit
+						# 'message'. This is a much nicer way to message the server.
+						if map._JSON?
+							try
+								message = JSON.parse map._JSON
+								@emit 'message', message
+
+					# Its kinda ugly adding another variable for this, but I need to increment @nextMapId by the number
+					# of records which have been processed.
+					@nextMapId += data.maps.length
+				else
+					# We have data.json. We'll just emit it directly.
+					for message in data.json
+						break if @state is 'closed'
+						@emit 'message', message
+
+					@nextMapId += data.json.length
 
 		# ## Encoding server arrays for the back channel
 		#
@@ -613,9 +672,17 @@ module.exports = browserChannel = (options, onConnect) ->
 				hostPrefix = getHostPrefix()
 				blockedPrefix = null # Blocked prefixes aren't supported.
 
+				# We add an extra special header to tell the client that this server likes
+				# json-encoded forward channel data over form urlencoded channel data.
+				#
+				# It might be easier to put these headers in the response body or increment the
+				# version, but that might conflict with future browserchannel versions.
+				headers = Object.create standardHeaders
+				headers['X-Accept'] = 'application/json; application/x-www-form-urlencoded'
+
 				# This is a straight-up normal HTTP request like the forward channel requests.
 				# We don't use the funny iframe write methods.
-				res.writeHead 200, 'OK', standardHeaders
+				res.writeHead 200, 'OK', headers
 				res.end(JSON.stringify [hostPrefix, blockedPrefix])
 
 			else
@@ -657,10 +724,7 @@ module.exports = browserChannel = (options, onConnect) ->
 				# For some reason, google replies with the same response on HTTP and HTML requests here.
 				# I'll follow suit, though its a little weird. Maybe I should do the same with all client
 				# errors?
-				unless client?
-					res.writeHead 400, 'Unknown SID', standardHeaders
-					res.end '<html><body>Unknown SID'
-					return
+				return sendError res, 400, 'Unknown SID' unless client?
 
 			client.acknowledgedArrays query.AID if query.AID? and client
 
@@ -674,8 +738,12 @@ module.exports = browserChannel = (options, onConnect) ->
 					onConnect? client
 
 				bufferPostData req, (data) ->
-					maps = decodeMaps data
-					client.receivedMaps (parseInt data.ofs), maps if maps.length > 0
+					try
+						data = decodeData req, data
+						client.receivedData data if data != null
+					catch e
+						console.warn 'Error parsing forward channel', e
+						return sendError res, 400, 'Bad data'
 
 					res.writeHead 200, 'OK', standardHeaders
 					# The initial forward channel request is also used as a backchannel for the server's
