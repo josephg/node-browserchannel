@@ -277,15 +277,10 @@ module.exports = browserChannel = (options, onConnect) ->
 		# - **ok**: The client is sitting pretty and ready to send and receive data.
 		#   The client should spend most of its time in this state.
 		#
-		# - **closing**: The client is invalid for some reason. The client stays in this
-		#   state long enough to tell the client to stop connecting and tell the
-		#   application that the client is going to be destroyed. Then the client is becomes
-		#   **closed** and its removed from the session list.
-		#
 		# - **closed**: The client has been removed from the session list. It can no longer
 		#   be used for any reason.
 		#
-		#   It is invalid to send arrays to a client while it is closing or closed. Unless you're
+		#   It is invalid to send arrays to a client while it is closed. Unless you're
 		#   Bruce Willis...
 		client.state = 'init'
 
@@ -322,7 +317,7 @@ module.exports = browserChannel = (options, onConnect) ->
 			# In this case, its possible that previously sent arrays haven't been received.
 			# By resetting lastSentArrayId, we're effectively rolling back the status of sent arrays
 			# to only those arrays which have been acknowledged.
-			@lastSentArrayId = @outgoingArrays[0][0] - 1 if @outgoingArrays.length > 0
+			@lastSentArrayId = @outgoingArrays[0].id - 1 if @outgoingArrays.length > 0
 
 			# Send any arrays we've buffered now that we have a backchannel
 			@flush()
@@ -381,23 +376,23 @@ module.exports = browserChannel = (options, onConnect) ->
 		client.acknowledgedArrays = (id) ->
 			id = parseInt id if typeof id is 'string'
 
-			while @outgoingArrays.length > 0 and @outgoingArrays[0][0] <= id
-				[arrayId, arr, callback] = @outgoingArrays.shift()
+			while @outgoingArrays.length > 0 and @outgoingArrays[0].id <= id
+				{confirmcallback} = @outgoingArrays.shift()
 				# I've got no idea what to do if we get an exception thrown here. The session will end up
 				# in an inconsistant state...
-				callback() if callback
+				confirmcallback?()
 
 			return
 
-		# Queue an array to be sent. The optional callback notifies a caller when the array has been
-		# received by the client.
+		# Queue an array to be sent. The optional callbacks notifies a caller when the array has been
+		# sent, and then received by the client.
 		#
-		# queueArray returns the ID of the queued array.
-		client.queueArray = (arr, callback) ->
-			if client.state in ['closing', 'closed']
-				throw new Error "Cannot queue array when state is #{@state}"
+		# queueArray returns the ID of the queued data chunk.
+		client.queueArray = (data, sendcallback, confirmcallback) ->
+			throw new Error "Cannot queue array when the session is already closed" if client.state == 'closed'
 
-			@outgoingArrays.push [++@lastArrayId, arr, callback] # MOAR Arrays! The people demand it!
+			id = ++@lastArrayId
+			@outgoingArrays.push {id, data, sendcallback, confirmcallback}
 
 			@lastArrayId
 
@@ -473,18 +468,25 @@ module.exports = browserChannel = (options, onConnect) ->
 		# Each individial message is prefixed by its *array id*, which is a counter starting at 0
 		# when the session is first created and incremented with each array.
 		client.sendTo = (write) ->
-			numUnsentArrays = client.lastArrayId - client.lastSentArrayId
+			numUnsentArrays = @lastArrayId - @lastSentArrayId
 			if numUnsentArrays > 0
-				arrays = client.outgoingArrays[client.outgoingArrays.length - numUnsentArrays ...]
+				arrays = @outgoingArrays[@outgoingArrays.length - numUnsentArrays ...]
 
-				# I've abused outgoingArrays to contain [id, data, callback]. We only send [id, data] to
+				# I've abused outgoingArrays to also contain some callbacks. We only send [id, data] to
 				# the client.
-				arrays = ([id, data] for [id, data] in arrays)
+				data = ([id, data] for {id, data} in arrays)
 
 				# **Away!**
-				write JSON.stringify(arrays) + "\n"
+				write JSON.stringify(data) + "\n"
 
-				client.lastSentArrayId = client.lastArrayId
+				client.lastSentArrayId = @lastArrayId
+
+				# Fire any send callbacks on the messages. These callbacks should only be called once.
+				# Again, not sure what to do if there are exceptions here.
+				for a in arrays
+					if a.sendcallback?
+						a.sendcallback?()
+						delete a.sendcallback
 
 			numUnsentArrays
 
@@ -494,22 +496,18 @@ module.exports = browserChannel = (options, onConnect) ->
 				if client.backChannel
 					sentSomething = client.sendTo client.backChannelMethods.write
 
-					# If we're in the process of closing the connection, the data we just sent will contain
-					# a `['stop']` message for the client. Once that has been sent, the closing process is done
-					# and the session can be destroyed.
-					#
-					# abort() will close the backchannel.
-					if client.state == 'closing'
-						client.abort 'Closed'
-					else
-						if !client.chunk and sentSomething
-							client.clearBackChannel()
+					if !client.chunk and sentSomething
+						client.clearBackChannel()
 					
 		# Send the client array data through the backchannel. This takes an optional callback which
 		# will be called with no arguments when the client acknowledges the array, or called with an
 		# error object if the client disconnects before the array is sent.
+		#
+		# queueArray can also take a callback argument which is called when the session sends the message
+		# in the first place. I'm not sure if I should expose this through send - I can't tell if its
+		# useful beyond the server code.
 		client.send = (arr, callback) ->
-			id = @queueArray arr, callback
+			id = @queueArray arr, null, callback
 			@flush()
 			id
 
@@ -521,18 +519,25 @@ module.exports = browserChannel = (options, onConnect) ->
 		# compatible with people who don't close their browsers.
 		client.appVersion = appVersion or null
 
-		# Signal to a client that it should stop trying to connect and make the connection die.
-		# This will send the special 'stop' signal to the client on the next backchannel before
-		# closing the connection.
-		client.close = ->
-			# I really wish I could use a callback on @send, but the client doesn't confirm the
-			# stop message. I need to close the connection as soon as the stop message has been sent.
-			# The fun stuff happens in abort(), which is called once the stop message has been
-			# sent. It is called by flush().
-			@send ['stop']
-			# changeState is called after @send because once we change to the closing state, no more
-			# messages can be sent.
-			@changeState 'closing'
+		# Signal to a client that it should stop trying to connect. This has no other effect
+		# on the server session.
+		#
+		# `stop` takes a callback which will be called once the message has been *sent* by the server.
+		# Typically, you should call it like this:
+		#
+		# ```
+		# session.stop ->
+		#   session.close()
+		# ```
+		#
+		# I considered making this automatically close the connection after you've called it, or after
+		# you've sent the stop message or something, but if I did that it wouldn't be obvious that you
+		# can still receive messages after stop() has been called. (Because you can!). That would never
+		# come up when you're testing locally, but it *would* come up in production. This is more obvious.
+		client.close = (callback) ->
+			return if @state is 'closed'
+			@queueArray ['stop'], callback, null
+			@flush()
 
 		# This closes a client's connections and makes the server forget about it.
 		# The client might try and reconnect if you only call `abort()`. It'll get a new
@@ -549,8 +554,8 @@ module.exports = browserChannel = (options, onConnect) ->
 			@clearBackChannel()
 			clearTimeout @sessionTimeout
 
-			for [id, data, callback] in @outgoingArrays
-				callback(new Error message || 'Client closed') if callback
+			for {confirmcallback} in @outgoingArrays
+				confirmcallback?(new Error message || 'Client closed')
 			
 			delete clients[@id]
 
@@ -696,7 +701,7 @@ module.exports = browserChannel = (options, onConnect) ->
 							# We don't care about the length of the array IDs or callback functions.
 							# Actually, I have no idea why the client wants to know how many bytes we
 							# haven't sent yet. I'm not sure it does much with it..
-							data = (a[1] for a in unacknowledgedArrays)
+							data = (a.data for a in unacknowledgedArrays)
 							JSON.stringify(data).length
 
 						response = JSON.stringify [

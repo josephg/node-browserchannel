@@ -1001,43 +1001,53 @@ module.exports = testCase
 
 				@client.abort 'foo'
 
-	# Close() is the API for 'stop trying to connect - something is wrong'. This triggers a STOP error in the
-	# client.
-	'Calling close() sends the stop command to the client':
+	# stop() sends a message to the client saying basically 'something is wrong, stop trying to
+	# connect'. It triggers a special error in the client, and the client will stop trying to reconnect
+	# at this point.
+	#
+	# The server can still receive messages after the stop message has been sent.
+	#
+	# Stop takes a callback which is called when the stop message has been sent. (The client never confirms
+	# that it has received the message).
+	'Calling stop() sends the stop command to the client':
 		'during init': (test) ->
 			@post '/channel/bind?VER=8&RID=1000&t=1', 'count=0', (res) =>
 				readLengthPrefixedJSON res, (data) =>
 					test.deepEqual data, [[0, ['c', @client.id, null, 8]], [1, ['stop']]]
-					test.expect 2
 					test.done()
 
 			@onClient = (@client) =>
 				@client.close()
 
-				@client.on 'close', (message) ->
-					test.strictEqual message, 'Closed'
-
 		'after init': (test) -> @connect ->
-			# The stop message will be sent in the back channel. Once the server has sent stop, it should
-			# close the backchannel. so we can use buffer to  and trigger on 'close'.
-			@get "/channel/bind?VER=8&RID=rpc&SID=#{@client.id}&AID=0&TYPE=xmlhttp&CI=0", (res) =>
+			# This test is similar to the test above, but I've put .stop() in a setTimeout.
+			req = @get "/channel/bind?VER=8&RID=rpc&SID=#{@client.id}&AID=0&TYPE=xmlhttp&CI=0", (res) =>
 				readLengthPrefixedJSON res, (data) ->
 					test.deepEqual data, [[1, ['stop']]]
-
-					res.on 'end', ->
-						test.done()
+					req.abort()
+					test.done()
 
 			setTimeout (=> @client.close()), 50
 
-			@client.on 'close', (message) ->
-				test.strictEqual message, 'Closed'
+	'A callback passed to stop is called once stop is sent to the client':
+		# ... because the stop message will be sent to the client in the initial connection
+		'during init': (test) -> @connect ->
+			@client.close ->
+				test.done()
 
-	'After close() is called, no maps are emitted by the client': (test) -> test.done()
+		'after init': (test) -> @connect ->
+			process.nextTick =>
+				req = @get "/channel/bind?VER=8&RID=rpc&SID=#{@client.id}&AID=0&TYPE=xmlhttp&CI=0", (res) =>
+					readLengthPrefixedJSON res, (data) ->
+						test.deepEqual data, [[1, ['stop']]]
+						test.expect 2
+						req.abort()
+						test.done()
 
-	'Calling close() during the initial connection stops the client immediately': (test) -> test.done()
-
-	'Client.close() makes subsequent client messages return an error': (test) -> test.done()
-
+				@client.close ->
+					# Just a noop test to increase the 'things tested' count
+					test.ok 1
+	
 	'Client.abort() closes the connection': (test) -> test.done()
 
 	'The server sends heartbeat messages on the backchannel, which keeps it open': (test) -> test.done()
