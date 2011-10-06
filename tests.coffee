@@ -494,6 +494,17 @@ module.exports = testCase
 				test.expect 2
 				test.done()
 
+	# Once again, only VER=8 works.
+	'Connecting with a version thats not 8 breaks': do ->
+		# This will POST to the requested path and make sure the response sets status 400
+		check400 = (path) -> (test) ->
+			@post path, 'count=0', (response) ->
+				test.strictEqual response.statusCode, 400
+				test.done()
+		
+		'no version': check400 '/channel/bind?RID=1000&t=1'
+		'previous version': check400 '/channel/bind?VER=7&RID=1000&t=1'
+
 	# This time, we'll send a map to the server during the initial handshake. This should be received
 	# by the server as normal.
 	'The client can post messages to the server during initialization': (test) ->
@@ -1128,54 +1139,63 @@ module.exports = testCase
 	#
 	#   To advertise this service, during the first test, the server sends X-Accept: application/json; ...
 	'The server decodes JSON data in a map if it has a _JSON key': (test) -> @connect ->
-		data = [{}, {'x':null}, 'hi', '!@#$%^&*()-=', '\'"']
-		qs = querystring.stringify count: 1, ofs: 0, req0__JSON: JSON.stringify data
+		data1 = [{}, {'x':null}, 'hi', '!@#$%^&*()-=', '\'"']
+		data2 = "hello dear user"
+		qs = querystring.stringify count: 2, ofs: 0, req0__JSON: (JSON.stringify data1), req1__JSON: (JSON.stringify data2)
 		# I can guarantee qs is awful.
 		@post "/channel/bind?VER=8&RID=1001&SID=#{@client.id}&AID=0", qs, (res) =>
 
-		@client.on 'message', (msg) ->
-			test.deepEqual msg, data
-			test.done()
+		@client.once 'message', (msg) =>
+			test.deepEqual msg, data1
+
+			@client.once 'message', (msg) ->
+				test.deepEqual msg, data2
+				test.done()
 
 	# The server might be JSON decoding the data, but it still needs to emit it as a map.
 	'The server emits JSON data in a map, as a map as well': (test) -> @connect ->
-		data = [{}, {'x':null}, 'hi', '!@#$%^&*()-=', '\'"']
-		qs = querystring.stringify count: 1, ofs: 0, req0__JSON: JSON.stringify data
+		data1 = [{}, {'x':null}, 'hi', '!@#$%^&*()-=', '\'"']
+		data2 = "hello dear user"
+		qs = querystring.stringify count: 2, ofs: 0, req0__JSON: (JSON.stringify data1), req1__JSON: (JSON.stringify data2)
 		@post "/channel/bind?VER=8&RID=1001&SID=#{@client.id}&AID=0", qs, (res) =>
 
 		# I would prefer to have more tests mixing maps and JSON data. I'm better off testing that
 		# thoroughly using a randomized tester.
-		@client.on 'map', (map) ->
-			test.deepEqual map, _JSON: JSON.stringify data
-			test.done()
+		@client.once 'map', (map) =>
+			test.deepEqual map, _JSON: JSON.stringify data1
+
+			@client.once 'map', (map) ->
+				test.deepEqual map, _JSON: JSON.stringify data2
+				test.done()
 
 	# The server also accepts raw JSON.
 	'The server accepts JSON data': (test) -> @connect ->
 		# The POST request has to specify Content-Type=application/json so we can't just use
 		# the @post request. (Big tears!)
-		#req = http.request {method:'POST', host:'localhost', path, @port}, callback
-		test.done()
+		options =
+			method: 'POST'
+			path: "/channel/bind?VER=8&RID=1001&SID=#{@client.id}&AID=0"
+			host: 'localhost'
+			port: @port
+			headers:
+				'Content-Type': 'application/json'
+
+		req = http.request options, (res) ->
+			readLengthPrefixedJSON res, (resData) ->
+				# We won't get this response until all the messages have been processed.
+				test.deepEqual resData, [0, 0, 0]
+				test.deepEqual data, []
+				test.expect 7
+
+				res.on 'end', -> test.done()
+
+		# This time I'm going to send the elements of the test object as separate messages.
+		data = [{}, {'x':null}, 'hi', '!@#$%^&*()-=', '\'"']
+		req.end (JSON.stringify {ofs:0, data})
 	
-	'Connecting with a version thats not 8 breaks': (test) -> test.done()
+		@client.on 'message', (msg) ->
+			test.deepEqual msg, data.shift()
 
-#server = connect browserChannel (client) ->
-#	if client.address != '127.0.0.1' or client.appVersion != '10'
-#		client.stop -> client.close()
-#
-#	client.on 'map', (data) ->
-#		console.log data
-#	
-#	client.send ['hi']
-#
-#	setInterval (-> client.send ['yo dawg']), 3000
-#
-#	client.on 'close', ->
-		# Clean up
-#server.listen(4321)
+	# I should also test that you can mix a bunch of JSON requests and map requests, out of order, and the
+	# server sorts it all out.
 
-# # Tests
-#
-# The browserchannel service exposes 2 API endpoints
-#
-# ## Test Service
-#	
