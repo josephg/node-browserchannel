@@ -12,13 +12,12 @@ delivery and state. It has better reconnection logic and error handling. With br
 node-browserchannel:
 
 - Is compatible with the closure library's browserchannel implementation
-- Super thoroughly tested (test:code ratio is currently 3:2 *and growing*)
+- Is thoroughly tested (test:code ratio is currently 3:2 *and growing*)
+- Works in IE6+, iOS, Safari, Chrome, Firefox, and probably others.
 - Working in any network environment (incl. behind buffering proxies)
-- Not dependant on websockets
 
 It will:
 
-- Work in IE6 (it might now, but I haven't tested it)
 - Have a simple client module (closure's api is ugly).
 - Use websockets
 
@@ -31,7 +30,7 @@ It will:
 Browserchannel is implemented as connect middleware. Here's a chat server:
 
 ```coffeescript
-browserChannel = require('..').server
+browserChannel = require('browserchannel').server
 connect = require 'connect'
 
 clients = []
@@ -56,6 +55,9 @@ server = connect(
 
 console.log 'Echo server listening on localhost:4321'
 ```
+
+At the moment clients are a bit gross to write, because you have to use google closure's API.
+[Here](https://gist.github.com/1267463) is an example client.
 
 ---
 
