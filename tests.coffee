@@ -986,7 +986,7 @@ module.exports = testCase
 			@onClient = ->
 
 		# The server can also abandon a connection by calling .abort(). Again, this should trigger error callbacks.
-		'when the client is aborted by the server': (test) -> @connect ->
+		'when the client is closed by the server': (test) -> @connect ->
 
 			@client.send 'hello there', (error) ->
 				test.ok error
@@ -999,7 +999,7 @@ module.exports = testCase
 					test.expect 4
 					test.done()
 
-				@client.abort 'foo'
+				@client.close 'foo'
 
 	# stop() sends a message to the client saying basically 'something is wrong, stop trying to
 	# connect'. It triggers a special error in the client, and the client will stop trying to reconnect
@@ -1017,7 +1017,7 @@ module.exports = testCase
 					test.done()
 
 			@onClient = (@client) =>
-				@client.close()
+				@client.stop()
 
 		'after init': (test) -> @connect ->
 			# This test is similar to the test above, but I've put .stop() in a setTimeout.
@@ -1027,12 +1027,12 @@ module.exports = testCase
 					req.abort()
 					test.done()
 
-			setTimeout (=> @client.close()), 50
+			setTimeout (=> @client.stop()), 50
 
 	'A callback passed to stop is called once stop is sent to the client':
 		# ... because the stop message will be sent to the client in the initial connection
 		'during init': (test) -> @connect ->
-			@client.close ->
+			@client.stop ->
 				test.done()
 
 		'after init': (test) -> @connect ->
@@ -1044,11 +1044,11 @@ module.exports = testCase
 						req.abort()
 						test.done()
 
-				@client.close ->
+				@client.stop ->
 					# Just a noop test to increase the 'things tested' count
 					test.ok 1
 	
-	'Client.abort() closes the connection': (test) -> test.done()
+	'Client.close() closes the connection': (test) -> test.done()
 
 	'The server sends heartbeat messages on the backchannel, which keeps it open': (test) -> test.done()
 
@@ -1062,7 +1062,7 @@ module.exports = testCase
 
 #server = connect browserChannel (client) ->
 #	if client.address != '127.0.0.1' or client.appVersion != '10'
-#		client.close()
+#		client.stop -> client.close()
 #
 #	client.on 'map', (data) ->
 #		console.log data

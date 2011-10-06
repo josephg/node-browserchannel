@@ -259,7 +259,7 @@ module.exports = browserChannel = (options, onConnect) ->
 		# session still exists, it gets ghosted IRC-style.
 		if oldSessionId? and (oldClient = clients[oldSessionId])
 			oldClient.acknowledgedArrays oldArrayId
-			oldClient.abort 'Reconnected'
+			oldClient.close 'Reconnected'
 
 		# Create a new client. Clients extend node's [EventEmitter][] so they have access to
 		# goodies like `client.on(event, handler)`, `client.emit('paarty')`, etc.
@@ -350,7 +350,7 @@ module.exports = browserChannel = (options, onConnect) ->
 
 		client.refreshSessionTimeout = ->
 			clearTimeout @sessionTimeout
-			@sessionTimeout = setTimeout (-> client.abort 'Timed out'), options.sessionTimeoutInterval
+			@sessionTimeout = setTimeout (-> client.close 'Timed out'), options.sessionTimeoutInterval
 
 		# Since the session doesn't start with a backchannel, we'll kick off the timeout timer as soon as its
 		# created.
@@ -534,18 +534,18 @@ module.exports = browserChannel = (options, onConnect) ->
 		# you've sent the stop message or something, but if I did that it wouldn't be obvious that you
 		# can still receive messages after stop() has been called. (Because you can!). That would never
 		# come up when you're testing locally, but it *would* come up in production. This is more obvious.
-		client.close = (callback) ->
+		client.stop = (callback) ->
 			return if @state is 'closed'
 			@queueArray ['stop'], callback, null
 			@flush()
 
 		# This closes a client's connections and makes the server forget about it.
-		# The client might try and reconnect if you only call `abort()`. It'll get a new
+		# The client might try and reconnect if you only call `close()`. It'll get a new
 		# client object if it does so.
 		#
 		# Abort takes an optional message argument, which is passed to the event handler.
-		client.abort = (message) ->
-			# You can't double-abort.
+		client.close = (message) ->
+			# You can't double-close.
 			return if @state == 'closed'
 
 			@changeState 'closed'
@@ -682,10 +682,7 @@ module.exports = browserChannel = (options, onConnect) ->
 					# initial data (session id, etc). This connection is a little bit special - it is always
 					# encoded using length-prefixed json encoding and it is closed as soon as the first chunk is
 					# sent.
-					#
-					# I can't use `if client.state == 'init'` here because the state could already be `closing`
-					# (since `onConnect()` above could have called `client.close()`)
-					unless query.SID
+					if client.state is 'init'
 						client.setBackChannel res, CI:1, TYPE:'xmlhttp', RID:'rpc'
 						client.flush()
 						# Again, we have to guard against the 'closing' state.
