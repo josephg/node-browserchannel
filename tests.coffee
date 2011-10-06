@@ -474,7 +474,9 @@ module.exports = testCase
 	# I'm starting to use the @connect method here, which just POSTs locally to create a session, sets @client and
 	# calls its callback.
 	'A client has state=ok after onClient returns': (test) -> @connect ->
-		process.nextTick =>
+		@client.on 'state changed', (newState, oldState) =>
+			test.strictEqual oldState, 'init'
+			test.strictEqual newState, 'ok'
 			test.strictEqual @client.state, 'ok'
 			test.done()
 
@@ -568,6 +570,28 @@ module.exports = testCase
 					# if we don't abort it manually.
 					req.abort()
 					test.done()
+
+	# The forward channel response tells the client how many unacknowledged bytes there are, so it can decide
+	# whether or not it thinks the backchannel is dead.
+	'The server tells the client how much unacknowledged data there is in the post response': (test) -> @connect ->
+		process.nextTick =>
+			# I'm going to send a few messages to the client and acknowledge the first one in a post response.
+			@client.send 'message 1'
+			@client.send 'message 2'
+			@client.send 'message 3'
+
+		# We'll make a backchannel and get the data
+		req = @get "/channel/bind?VER=8&RID=rpc&SID=#{@client.id}&AID=0&TYPE=xmlhttp&CI=0", (res) =>
+			readLengthPrefixedJSON res, (data) =>
+				# After the data is received, I'll acknowledge the first message using an empty POST
+				@post "/channel/bind?VER=8&RID=1001&SID=#{@client.id}&AID=1", 'count=0', (res) =>
+					readLengthPrefixedJSON res, (data) =>
+						# We should get a response saying "The backchannel is connected", "The last message I sent was 3"
+						# "messages 2 and 3 haven't been acknowledged, here's their size"
+						test.deepEqual data, [1, 3, 25]
+						req.abort()
+						test.done()
+
 	
 	# When the user calls send(), data is queued by the server and sent into the next backchannel connection.
 	#
@@ -578,6 +602,7 @@ module.exports = testCase
 		@onClient = (@client) =>
 			@client.send testData
 
+		# I'm not using @connect because we need to know about the response to the first POST.
 		@post '/channel/bind?VER=8&RID=1000&t=1', 'count=0', (res) =>
 			readLengthPrefixedJSON res, (data) =>
 				test.deepEqual data, [[0, ['c', @client.id, null, 8]], [1, testData]]
@@ -1113,6 +1138,32 @@ module.exports = testCase
 				test.strictEqual res.statusCode, 400
 				test.done()
 
+	# The session runs as a little state machine. It starts in the 'init' state, then moves to
+	# 'ok' when the session is established. When the connection is closed, it moves to 'closed' state
+	# and stays there forever.
+	'The client emits a "state changed" event when you close it':
+		'immediately': (test) -> @connect ->
+			# Because we're calling close() immediately, the session should never make it to the 'ok' state
+			# before moving to 'closed'.
+			@client.on 'state changed', (nstate, ostate) =>
+				test.strictEqual nstate, 'closed'
+				test.strictEqual ostate, 'init'
+				test.strictEqual @client.state, 'closed'
+				test.done()
+
+			@client.close()
+
+		'after it has opened': (test) -> @connect ->
+			# This time we'll let the state change to 'ok' before closing the connection.
+			@client.on 'state changed', (nstate, ostate) =>
+				if nstate is 'ok'
+					@client.close()
+				else
+					test.strictEqual nstate, 'closed'
+					test.strictEqual ostate, 'ok'
+					test.strictEqual @client.state, 'closed'
+					test.done()
+
 	# close() also kills any active backchannel connection.
 	'close kills the active backchannel': (test) -> @connect ->
 		@get "/channel/bind?VER=8&RID=rpc&SID=#{@client.id}&AID=0&TYPE=xmlhttp&CI=0", (res) =>
@@ -1195,6 +1246,8 @@ module.exports = testCase
 	
 		@client.on 'message', (msg) ->
 			test.deepEqual msg, data.shift()
+
+	#'print': (test) -> @connect -> console.warn @client; test.done()
 
 	# I should also test that you can mix a bunch of JSON requests and map requests, out of order, and the
 	# server sorts it all out.

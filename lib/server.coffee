@@ -1,10 +1,23 @@
-# This is a BrowserChannel server.
+# # A BrowserChannel server.
 #
-# - Its brand new, and it barely works
-# - It is missing tests
-# - API will change
+# - Its still pretty young, so there's probably bugs lurking around and the API
+#   will still change quickly.
+# - Its missing integration tests
 #
-# The server is implemented as connect middleware.
+# It works in all the browsers I've tried.
+#
+# I've written this using the literate programming style to try it out. So, thats why
+# there's a million comments everywhere.
+#
+# The server is implemented as connect middleware. Its intended to be used like this:
+#
+# ```
+# server = connect(
+#   browserChannel (client) -> client.send 'hi'
+# )
+# ```
+
+# ## Dependancies, helper methods and constant data
 
 # `parse` helps us decode URLs in requests
 {parse} = require 'url'
@@ -250,6 +263,10 @@ decodeData = (req, data) ->
 
 		{ofs, maps}
 
+# ---
+#
+# # The server middleware
+#
 # The server module returns a function, which you can call with your configuration
 # options. It returns your configured connect middleware, which is actually another function.
 module.exports = browserChannel = (options, onConnect) ->
@@ -292,7 +309,7 @@ module.exports = browserChannel = (options, onConnect) ->
 		# When a client reconnects, it can specify an old session id and old array id. If that
 		# session still exists, it gets ghosted IRC-style.
 		if oldSessionId? and (oldClient = clients[oldSessionId])
-			oldClient.acknowledgedArrays oldArrayId
+			oldClient._acknowledgeArrays oldArrayId
 			oldClient.close 'Reconnected'
 
 		# Create a new client. Clients extend node's [EventEmitter][] so they have access to
@@ -320,98 +337,117 @@ module.exports = browserChannel = (options, onConnect) ->
 
 		# The state is modified through this method. It emits events when the state changes.
 		# (yay)
-		client.changeState = (newState) ->
-			oldState = @state
-			@state = newState
-			@emit 'state changed', @state, oldState
+		changeState = (newState) ->
+			oldState = client.state
+			client.state = newState
+			client.emit 'state changed', client.state, oldState
 
 		# The server sends messages to the client via a hanging GET request. Of course,
 		# the client has to be the one to open that request.
 		#
 		# This is a handle to that request.
-		client.setBackChannel = (res, query) ->
-			throw new Error 'Invalid backchannel headers' unless query.RID == 'rpc'
+		backChannel = null
 
-			@clearBackChannel()
-
-			@backChannel = res
-			@backChannelMethods = messagingMethods query, res
-
-			@backChannel.connection.once 'close', -> client.clearBackChannel(res)
-
-			@chunk = query.CI == '0'
-
-			# We'll start the heartbeat interval and clear out the session timeout.
-			# The session timeout will be started again if the backchannel connection closes for
-			# any reason.
-			@refreshHeartbeat()
-			clearTimeout @sessionTimeout
-
-			# When a new backchannel is created, its possible that the old backchannel is dead.
-			# In this case, its possible that previously sent arrays haven't been received.
-			# By resetting lastSentArrayId, we're effectively rolling back the status of sent arrays
-			# to only those arrays which have been acknowledged.
-			@lastSentArrayId = @outgoingArrays[0].id - 1 if @outgoingArrays.length > 0
-
-			# Send any arrays we've buffered now that we have a backchannel
-			@flush()
-
-		# This method removes the back channel and any state associated with it. It'll get called
-		# when the backchannel closes naturally, is replaced or when the connection closes.
-		client.clearBackChannel = (res) ->
-			# Its important that we only delete the backchannel if the closed connection is actually
-			# the backchannel we're currently using.
-			return if res? and res != @backChannel
-			# This method doesn't do anything if we call it repeatedly.
-			return unless @backChannel?
-
-			# clearTimeout has no effect if the timeout doesn't exist
-			clearTimeout @heartbeat
-
-			@backChannelMethods.end()
-			@backChannel = @backChannelMethods = null
-
-			# Whenever we don't have a backchannel, we run the session timeout timer.
-			@refreshSessionTimeout()
-			
-		client.refreshHeartbeat = ->
-			clearTimeout @heartbeat
-
-			# If we haven't sent anything for 15 seconds, we'll send a little `['noop']` to the
-			# client so it knows we haven't forgotten it. (And to make sure the backchannel
-			# connection doesn't time out.)
-			@heartbeat = setInterval (-> client.send ['noop']), options.keepAliveInterval
-
-		client.refreshSessionTimeout = ->
-			clearTimeout @sessionTimeout
-			@sessionTimeout = setTimeout (-> client.close 'Timed out'), options.sessionTimeoutInterval
-
-		# Since the session doesn't start with a backchannel, we'll kick off the timeout timer as soon as its
-		# created.
-		client.refreshSessionTimeout()
+		# ... And we keep a reference to the right set of methods for communicating with the
+		# backchannel. (The methods change if we're in an iframe, etc).
+		backChannelMethods = null
+		
+		# Do we chunk? The client has decided this during the testing phase, and now passes it
+		# as a query parameter when the backchannel is opened.
+		chunk = null
 
 		# The server sends data to the client by sending *arrays*. It seems a bit silly that
 		# client->server messages are maps and server->client messages are arrays, but there it is.
 		#
 		# Each entry in this array is of the form [id, data].
-		client.outgoingArrays = []
+		outgoingArrays = []
 
 		# `lastArrayId` is the array ID of the last queued array
-		client.lastArrayId = -1
+		lastArrayId = -1
 
 		# Every request from the client has an *AID* parameter which tells the server the ID
 		# of the last request the client has received. We won't remove arrays from the outgoingArrays
 		# list until the client has confirmed its received them.
 		#
 		# In `lastSentArrayId` we store the ID of the last array which we actually sent.
-		client.lastSentArrayId = -1
+		lastSentArrayId = -1
+
+		# I would like this method to be private or something, but it needs to be accessed from
+		# the HTTP request code below. The _ at the start will hopefully make people think twice
+		# before using it.
+		client._setBackChannel = (res, query) ->
+			throw new Error 'Invalid backchannel headers' unless query.RID == 'rpc'
+
+			clearBackChannel()
+
+			backChannel = res
+			backChannelMethods = messagingMethods query, res
+
+			backChannel.connection.once 'close', -> clearBackChannel(res)
+
+			chunk = query.CI == '0'
+
+			# We'll start the heartbeat interval and clear out the session timeout.
+			# The session timeout will be started again if the backchannel connection closes for
+			# any reason.
+			refreshHeartbeat()
+			clearTimeout sessionTimeout
+
+			# When a new backchannel is created, its possible that the old backchannel is dead.
+			# In this case, its possible that previously sent arrays haven't been received.
+			# By resetting lastSentArrayId, we're effectively rolling back the status of sent arrays
+			# to only those arrays which have been acknowledged.
+			lastSentArrayId = outgoingArrays[0].id - 1 if outgoingArrays.length > 0
+
+			# Send any arrays we've buffered now that we have a backchannel
+			@flush()
+
+		# If we haven't sent anything for 15 seconds, we'll send a little `['noop']` to the
+		# client so it knows we haven't forgotten it. (And to make sure the backchannel
+		# connection doesn't time out.)
+		heartbeat = null
+
+		# This method removes the back channel and any state associated with it. It'll get called
+		# when the backchannel closes naturally, is replaced or when the connection closes.
+		clearBackChannel = (res) ->
+			# Its important that we only delete the backchannel if the closed connection is actually
+			# the backchannel we're currently using.
+			return if res? and res != backChannel
+			# This method doesn't do anything if we call it repeatedly.
+			return unless backChannel?
+
+			# Conveniently, clearTimeout has no effect if the argument is null.
+			clearTimeout heartbeat
+
+			backChannelMethods.end()
+			backChannel = backChannelMethods = null
+
+			# Whenever we don't have a backchannel, we run the session timeout timer.
+			refreshSessionTimeout()
+
+		# This method sets / resets the heartbeat timeout to the full 15 seconds.
+		refreshHeartbeat = ->
+			clearTimeout heartbeat
+
+			heartbeat = setInterval (-> client.send ['noop']), options.keepAliveInterval
+
+		# The session will close if there's been no backchannel for awhile.
+		sessionTimeout = null
+
+		refreshSessionTimeout = ->
+			clearTimeout sessionTimeout
+			sessionTimeout = setTimeout (-> client.close 'Timed out'), options.sessionTimeoutInterval
+
+		# Since the session doesn't start with a backchannel, we'll kick off the timeout timer as soon as its
+		# created.
+		refreshSessionTimeout()
 
 		# The arrays get removed once they've been acknowledged
-		client.acknowledgedArrays = (id) ->
+		client._acknowledgeArrays = (id) ->
 			id = parseInt id if typeof id is 'string'
 
-			while @outgoingArrays.length > 0 and @outgoingArrays[0].id <= id
-				{confirmcallback} = @outgoingArrays.shift()
+			while outgoingArrays.length > 0 and outgoingArrays[0].id <= id
+				{confirmcallback} = outgoingArrays.shift()
 				# I've got no idea what to do if we get an exception thrown here. The session will end up
 				# in an inconsistant state...
 				confirmcallback?()
@@ -422,18 +458,13 @@ module.exports = browserChannel = (options, onConnect) ->
 		# sent, and then received by the client.
 		#
 		# queueArray returns the ID of the queued data chunk.
-		client.queueArray = (data, sendcallback, confirmcallback) ->
+		queueArray = (data, sendcallback, confirmcallback) ->
 			throw new Error "Cannot queue array when the session is already closed" if client.state == 'closed'
 
-			id = ++@lastArrayId
-			@outgoingArrays.push {id, data, sendcallback, confirmcallback}
+			id = ++lastArrayId
+			outgoingArrays.push {id, data, sendcallback, confirmcallback}
 
-			@lastArrayId
-
-		# Find and return the arrays have been sent over the wire but haven't been acknowledged yet
-		client.unacknowledgedArrays = ->
-			numUnsentArrays = client.lastArrayId - client.lastSentArrayId
-			client.outgoingArrays[... client.outgoingArrays - numUnsentArrays]
+			lastArrayId
 
 		# The session has just been created. The first thing it needs to tell the client
 		# is its session id and host prefix and stuff.
@@ -441,7 +472,19 @@ module.exports = browserChannel = (options, onConnect) ->
 		# It would be pretty easy to add a callback here setting the client status to 'ok' or
 		# something, but its not really necessary. The client has already connected once the first
 		# POST /bind has been received.
-		client.queueArray ['c', client.id, getHostPrefix(), 8]
+		queueArray ['c', client.id, getHostPrefix(), 8]
+				
+		# Send the client array data through the backchannel. This takes an optional callback which
+		# will be called with no arguments when the client acknowledges the array, or called with an
+		# error object if the client disconnects before the array is sent.
+		#
+		# queueArray can also take a callback argument which is called when the session sends the message
+		# in the first place. I'm not sure if I should expose this through send - I can't tell if its
+		# useful beyond the server code.
+		client.send = (arr, callback) ->
+			id = queueArray arr, null, callback
+			@flush()
+			id
 
 		# ### Maps
 		# 
@@ -509,6 +552,29 @@ module.exports = browserChannel = (options, onConnect) ->
 
 					@nextMapId += data.json.length
 
+		# When we receive forwardchannel data, we reply with a special little 3-variable array to tell the
+		# client if it should reopen the backchannel.
+		#
+		# This method returns what the forward channel should reply with.
+		client._backChannelStatus = ->
+			# Find the arrays have been sent over the wire but haven't been acknowledged yet
+			numUnsentArrays = lastArrayId - lastSentArrayId
+			unacknowledgedArrays = outgoingArrays[... outgoingArrays.length - numUnsentArrays]
+			outstandingBytes = if unacknowledgedArrays.length == 0
+				0
+			else
+				# We don't care about the length of the array IDs or callback functions.
+				# I'm actually not sure what data the client expects here - the value is just used in a rough
+				# heuristic to determine if the backchannel should be reopened.
+				data = (a.data for a in unacknowledgedArrays)
+				JSON.stringify(data).length
+
+			[
+				(if backChannel then 1 else 0)
+				lastSentArrayId
+				outstandingBytes
+			]
+
 		# ## Encoding server arrays for the back channel
 		#
 		# The server sends data to the client in **chunks**. Each chunk is a *JSON* array prefixed
@@ -527,9 +593,9 @@ module.exports = browserChannel = (options, onConnect) ->
 		# Each individial message is prefixed by its *array id*, which is a counter starting at 0
 		# when the session is first created and incremented with each array.
 		client.sendTo = (write) ->
-			numUnsentArrays = @lastArrayId - @lastSentArrayId
+			numUnsentArrays = lastArrayId - lastSentArrayId
 			if numUnsentArrays > 0
-				arrays = @outgoingArrays[@outgoingArrays.length - numUnsentArrays ...]
+				arrays = outgoingArrays[outgoingArrays.length - numUnsentArrays ...]
 
 				# I've abused outgoingArrays to also contain some callbacks. We only send [id, data] to
 				# the client.
@@ -538,7 +604,7 @@ module.exports = browserChannel = (options, onConnect) ->
 				# **Away!**
 				write JSON.stringify(data) + "\n"
 
-				client.lastSentArrayId = @lastArrayId
+				lastSentArrayId = lastArrayId
 
 				# Fire any send callbacks on the messages. These callbacks should only be called once.
 				# Again, not sure what to do if there are exceptions here.
@@ -552,24 +618,16 @@ module.exports = browserChannel = (options, onConnect) ->
 		# Queue the arrays to be sent on the next tick
 		client.flush = ->
 			process.nextTick ->
-				if client.backChannel
-					sentSomething = client.sendTo client.backChannelMethods.write
+				if backChannel
+					sentSomething = client.sendTo backChannelMethods.write
 
-					if !client.chunk and sentSomething
-						client.clearBackChannel()
-					
-		# Send the client array data through the backchannel. This takes an optional callback which
-		# will be called with no arguments when the client acknowledges the array, or called with an
-		# error object if the client disconnects before the array is sent.
-		#
-		# queueArray can also take a callback argument which is called when the session sends the message
-		# in the first place. I'm not sure if I should expose this through send - I can't tell if its
-		# useful beyond the server code.
-		client.send = (arr, callback) ->
-			id = @queueArray arr, null, callback
-			@flush()
-			id
+					if !chunk and sentSomething
+						clearBackChannel()
 
+					# The first backchannel is the client's initial connection. Once we've sent the first
+					# data chunk to the client, we've officially opened the connection.
+					changeState 'ok' if client.state == 'init'
+	
 		# The client's IP address when it first opened the session
 		client.address = address
 
@@ -595,7 +653,7 @@ module.exports = browserChannel = (options, onConnect) ->
 		# come up when you're testing locally, but it *would* come up in production. This is more obvious.
 		client.stop = (callback) ->
 			return if @state is 'closed'
-			@queueArray ['stop'], callback, null
+			queueArray ['stop'], callback, null
 			@flush()
 
 		# This closes a client's connections and makes the server forget about it.
@@ -607,13 +665,13 @@ module.exports = browserChannel = (options, onConnect) ->
 			# You can't double-close.
 			return if @state == 'closed'
 
-			@changeState 'closed'
+			changeState 'closed'
 			@emit 'close', message
 
-			@clearBackChannel()
-			clearTimeout @sessionTimeout
+			clearBackChannel()
+			clearTimeout sessionTimeout
 
-			for {confirmcallback} in @outgoingArrays
+			for {confirmcallback} in outgoingArrays
 				confirmcallback?(new Error message || 'Client closed')
 			
 			delete clients[@id]
@@ -726,7 +784,7 @@ module.exports = browserChannel = (options, onConnect) ->
 				# errors?
 				return sendError res, 400, 'Unknown SID' unless client?
 
-			client.acknowledgedArrays query.AID if query.AID? and client
+			client._acknowledgeArrays query.AID if query.AID? and client
 
 			#### Forward Channel
 			if req.method == 'POST'
@@ -751,30 +809,13 @@ module.exports = browserChannel = (options, onConnect) ->
 					# encoded using length-prefixed json encoding and it is closed as soon as the first chunk is
 					# sent.
 					if client.state is 'init'
-						client.setBackChannel res, CI:1, TYPE:'xmlhttp', RID:'rpc'
+						client._setBackChannel res, CI:1, TYPE:'xmlhttp', RID:'rpc'
 						client.flush()
-						# Again, we have to guard against the 'closing' state.
-						client.changeState 'ok' if client.state == 'init'
 					else
 						# On normal forward channels, we reply to the request by telling the client
 						# if our backchannel is still live and telling it how many unconfirmed
 						# arrays we have.
-						unacknowledgedArrays = client.unacknowledgedArrays()
-						outstandingBytes = if unacknowledgedArrays.length == 0
-							0
-						else
-							# We don't care about the length of the array IDs or callback functions.
-							# Actually, I have no idea why the client wants to know how many bytes we
-							# haven't sent yet. I'm not sure it does much with it..
-							data = (a.data for a in unacknowledgedArrays)
-							JSON.stringify(data).length
-
-						response = JSON.stringify [
-							(if client.backChannel then 1 else 0)
-							client.lastSentArrayId
-							outstandingBytes
-						]
-
+						response = JSON.stringify client._backChannelStatus()
 						res.end "#{response.length}\n#{response}"
 
 			#### Back Channel
@@ -783,7 +824,7 @@ module.exports = browserChannel = (options, onConnect) ->
 				throw new Error 'Session not specified' unless client?
 				#console.log 'Back channel:', query
 				writeHead()
-				client.setBackChannel res, query
+				client._setBackChannel res, query
 
 			else
 				res.writeHead 405, 'Method Not Allowed', standardHeaders
