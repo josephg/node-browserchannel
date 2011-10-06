@@ -1,24 +1,70 @@
-> This is a work in progress. It does not work yet.
-
 This is an implementation of google's [BrowserChannel](http://closure-library.googlecode.com/svn/trunk/closure/goog/net/browserchannel.js) protocol for communicating with a browser.
 
-BrowserChannel is google's version of [socket.io](http://socket.io) from when they first put chat in gmail. Unlike socket.io, browserchannel provides much better guarantees about message delivery and state. It has much better reconnection logic and error handling. Ie, you know whats going on. In exchange, its also slightly slower, it doesn't work cross-domain and it doesn't use websockets.
+BrowserChannel is google's version of [socket.io](http://socket.io) from when they first put
+chat in gmail. Unlike socket.io, browserchannel provides much better guarantees about message
+delivery and state. It has better reconnection logic and error handling. With browserchannel,
+**you know whats going on**. In exchange, BrowserChannel doesn't work cross-domain and it doesn't
+use websockets. (So, its a little slower.)
+
+[![Build Status](https://secure.travis-ci.org/josephg/node-browserchannel.png)](http://travis-ci.org/josephg/node-browserchannel)
+
+node-browserchannel:
+
+- Is compatible with the closure library's browserchannel implementation
+- Super thoroughly tested (test:code ratio is currently 3:2 *and growing*)
+- Working in any network environment (incl. behind buffering proxies)
+- Not dependant on websockets
 
 It will:
 
-- Be compatible with the closure library's browserchannel implementation
-- Work in IE6
-- Be super thoroughly tested
-- Work in any network environment (incl. behind buffering proxies)
-- Not depend on websockets
-- Have a simple client module which wraps browserchannel's ugly API.
+- Work in IE6 (it might now, but I haven't tested it)
+- Have a simple client module which wraps closure's ugly client API.
+- Use websockets when they're available and they work
 
-It will not:
+---
 
-- Do RPC
-- Ever land in an inconsistant state
+# Use it
+
+    # npm install browserchannel
+
+Browserchannel is implemented as connect middleware. Here's a chat server:
+
+```coffeescript
+browserChannel = require('..').server
+connect = require 'connect'
+
+clients = []
+
+server = connect(
+	connect.static "#{__dirname}/public"
+	browserChannel (client) ->
+		console.log "Client #{client.id} connected"
+
+		clients.push client
+
+		client.on 'map', (data) ->
+			console.log "#{client.id} sent #{JSON.stringify data}"
+			# broadcast to all other clients
+			c.send data for c in clients when c != client
+
+		client.on 'close', (reason) ->
+			console.log "Client #{client.id} disconnected (#{reason})"
+			# Remove the client from the client list
+			clients = (c for c in clients when c != client)
+
+).listen(4321)
+console.log 'Echo server listening on localhost:4321'
+```
+
+---
+
+# Caveats
+
+- Currently, you have to use closure to connect to it
+- There's no nodejs client module yet
+- It doesn't do RPC. I might make a fork of dnode which uses browserchannel instead of socket.io
 - Work in cross-origin environments in all browsers. If you want to host static content
-  in one process and do dynamic stuff somewhere else you should put browserchannel behind
+  in one process and do dynamic stuff somewhere else you can put browserchannel behind
   [nginx](http://nginx.net/) or [varnish](https://www.varnish-cache.org/)
   or something and proxy browserchannel connections to nodejs.
 
