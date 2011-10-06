@@ -90,6 +90,16 @@ expect = (res, str, callback) ->
 			res.removeListener 'end', endlistener
 			callback()
 
+# A bunch of tests require that we wait for a network connection to get established
+# before continuing.
+#
+# We'll do that using a setTimeout with plenty of time. I hate adding delays, but I
+# can't see another way to do this.
+#
+# This should be plenty of time. I might even be able to reduce this. Note that this
+# is a real delay, not a stubbed out timer like we give to the server.
+soon = (f) -> setTimeout f, 10
+
 # The backchannel is implemented using a bunch of messages which look like this:
 #
 # ```
@@ -353,14 +363,11 @@ module.exports = testCase
 					# for messages from the client. If we get a message during this time, throw an error.
 					response.on 'data', f = -> throw new Error 'should not get more data so early'
 					timer.wait 1999, ->
-						# This is the real `setTimeout` method here. We'll wait 50 milliseconds, which should be way
-						# more than enough to get a response from a local server, if its going to give us one.
-						setTimeout ->
-								response.removeListener 'data', f
-								timer.wait 1, ->
-									expect response, message2, ->
-										response.once 'end', -> test.done()
-							, 50
+						soon ->
+							response.removeListener 'data', f
+							timer.wait 1, ->
+								expect response, message2, ->
+									response.once 'end', -> test.done()
 
 		'xmlhttp': makeTest 'xmlhttp', '11111', '2'
 
@@ -531,17 +538,16 @@ module.exports = testCase
 		# Unfortunately, the GET request is sent *after* the POST, so we have to wrap the
 		# post in a timeout to make sure it hits the server after the backchannel connection is
 		# established.
-		setTimeout =>
-				@post "/channel/bind?VER=8&RID=1001&SID=#{@client.id}&AID=0", 'count=1&ofs=0&req0_k=v', (res) =>
-					readLengthPrefixedJSON res, (data) =>
-						# This time, we get a 1 as the first argument because the backchannel connection is
-						# established.
-						test.deepEqual data, [1, 0, 0]
-						# The backchannel hasn't gotten any data yet. It'll spend 15 seconds or so timing out
-						# if we don't abort it manually.
-						req.abort()
-						test.done()
-			, 50
+		soon =>
+			@post "/channel/bind?VER=8&RID=1001&SID=#{@client.id}&AID=0", 'count=1&ofs=0&req0_k=v', (res) =>
+				readLengthPrefixedJSON res, (data) =>
+					# This time, we get a 1 as the first argument because the backchannel connection is
+					# established.
+					test.deepEqual data, [1, 0, 0]
+					# The backchannel hasn't gotten any data yet. It'll spend 15 seconds or so timing out
+					# if we don't abort it manually.
+					req.abort()
+					test.done()
 	
 	# When the user calls send(), data is queued by the server and sent into the next backchannel connection.
 	#
@@ -586,7 +592,7 @@ module.exports = testCase
 				test.done()
 
 		# Send the data outside of the get block to make sure it makes it through.
-		setTimeout (=> @client.send testData), 50
+		soon => @client.send testData
 	
 	# The server should call the send callback once the data has been confirmed by the client.
 	#
@@ -603,7 +609,7 @@ module.exports = testCase
 			@client.send [2], ->
 				test.strictEqual lastAck, 1
 				# I want to give the test time to die
-				setTimeout (-> test.done()), 50
+				soon -> test.done()
 
 			# This callback should actually get called with an error after the client times out.
 			@client.send [3], -> throw new Error 'Should not call unacknowledged client callback'
@@ -647,10 +653,9 @@ module.exports = testCase
 				# it times out naturally)
 				res.on 'end', -> throw new Error 'connection should have stayed open'
 
-				setTimeout ->
-						req.abort()
-						test.done()
-					, 50
+				soon ->
+					req.abort()
+					test.done()
 
 	# On IE, the data is all loaded using iframes. The backchannel spits out data using inline scripts
 	# in an HTML page.
@@ -756,9 +761,8 @@ module.exports = testCase
 		# First, send `[{v:2}]`
 		@post "/channel/bind?VER=8&RID=1002&SID=#{@client.id}&AID=0", 'count=1&ofs=2&req0_v=2', (res) =>
 		# ... then `[{v:0}, {v:1}]` a few MS later.
-		setTimeout =>
-				@post "/channel/bind?VER=8&RID=1001&SID=#{@client.id}&AID=0", 'count=2&ofs=0&req0_v=0&req1_v=1', (res) =>
-			, 50
+		soon =>
+			@post "/channel/bind?VER=8&RID=1001&SID=#{@client.id}&AID=0", 'count=2&ofs=0&req0_v=0&req1_v=1', (res) =>
 	
 	# Again, think of browserchannel as TCP on top of UDP...
 	'Repeated forward channel messages are discarded': (test) -> @connect ->
@@ -775,10 +779,9 @@ module.exports = testCase
 		@post "/channel/bind?VER=8&RID=1001&SID=#{@client.id}&AID=0", 'count=1&ofs=0&req0_v=0', (res) =>
 
 		# Wait 50 milliseconds for the map to (maybe!) be received twice, then pass.
-		setTimeout ->
-				test.strictEqual gotMessage, true
-				test.done()
-			, 50
+		soon ->
+			test.strictEqual gotMessage, true
+			test.done()
 
 	# With each request to the server, the client tells the server what array it saw last through the AID= parameter.
 	#
@@ -889,7 +892,9 @@ module.exports = testCase
 				lastMessage = 3
 				test.strictEqual error.message, 'Reconnected'
 
-				setTimeout (-> req.abort(); test.done()), 50
+				soon ->
+					req.abort()
+					test.done()
 
 			# And now we'll nuke the session and confirm the first two arrays. But first, its important
 			# the client has a backchannel to send data to (confirming arrays before a backchannel is opened
@@ -917,19 +922,18 @@ module.exports = testCase
 			req = @get "/channel/bind?VER=8&RID=rpc&SID=#{@client.id}&AID=0&TYPE=xmlhttp&CI=0", (res) =>
 
 			# I'll let the backchannel establish itself for a moment, and then nuke it.
-			setTimeout =>
-					req.abort()
-					# It should take about 30 seconds from now to timeout the connection.
-					start = timer.Date.now()
-					@client.on 'close', (reason) ->
-						test.strictEqual reason, 'Timed out'
-						test.ok timer.Date.now() - start >= 30000
-						test.done()
+			soon =>
+				req.abort()
+				# It should take about 30 seconds from now to timeout the connection.
+				start = timer.Date.now()
+				@client.on 'close', (reason) ->
+					test.strictEqual reason, 'Timed out'
+					test.ok timer.Date.now() - start >= 30000
+					test.done()
 
-					# The timer sessionTimeout won't be queued up until after the abort() message makes it
-					# to the server. I hate all these delays, but its not easy to write this test without them.
-					setTimeout (-> timer.waitAll()), 50
-				, 50
+				# The timer sessionTimeout won't be queued up until after the abort() message makes it
+				# to the server. I hate all these delays, but its not easy to write this test without them.
+				soon -> timer.waitAll()
 
 	# The server sends a little heartbeat across the backchannel every 20 seconds if there hasn't been
 	# any chatter anyway. This keeps the machines en route from evicting the backchannel connection.
@@ -937,16 +941,40 @@ module.exports = testCase
 	'A heartbeat is sent across the backchannel (by default) every 20 seconds': (test) -> @connect ->
 		start = timer.Date.now()
 
-		process.nextTick =>
-			req = @get "/channel/bind?VER=8&RID=rpc&SID=#{@client.id}&AID=0&TYPE=xmlhttp&CI=0", (res) =>
+		req = @get "/channel/bind?VER=8&RID=rpc&SID=#{@client.id}&AID=0&TYPE=xmlhttp&CI=0", (res) =>
+			readLengthPrefixedJSON res, (msg) ->
+				# this really just tests that one heartbeat is sent.
+				test.deepEqual msg, [[1, ['noop']]]
+				test.ok timer.Date.now() - start >= 20000
+				req.abort()
+				test.done()
+
+		# Once again, we can't call waitAll() until the request has hit the server.
+		soon -> timer.waitAll()
+
+	# So long as the backchannel stays open, the server should just keep sending heartbeats and
+	# the session doesn't timeout.
+	'A server with an active backchannel doesnt timeout': (test) -> @connect ->
+		aid = 1
+		req = @get "/channel/bind?VER=8&RID=rpc&SID=#{@client.id}&AID=0&TYPE=xmlhttp&CI=0", (res) =>
+			getNextNoop = ->
 				readLengthPrefixedJSON res, (msg) ->
-					test.deepEqual msg, [[1, ['noop']]]
-					test.ok timer.Date.now() - start >= 20000
+					test.deepEqual msg, [[aid++, ['noop']]]
+					getNextNoop()
+			
+			getNextNoop()
+
+		# ... give the backchannel time to get established
+		soon ->
+			# wait 500 seconds. In that time, we'll get 25 noops.
+			timer.wait 500 * 1000, ->
+				# and then give the last noop a chance to get sent
+				soon ->
+					test.strictEqual aid, 26
 					req.abort()
 					test.done()
 
-			# Once again, we can't call waitAll() until the request has hit the server.
-			setTimeout (-> timer.waitAll()), 50
+		#req = @get "/channel/bind?VER=8&RID=rpc&SID=#{@client.id}&AID=0&TYPE=xmlhttp&CI=0", (res) =>
 
 	# The send callback should be called _no matter what_. That means if a connection times out, it should
 	# still be called, but we'll pass an error into the callback.
@@ -1027,7 +1055,7 @@ module.exports = testCase
 					req.abort()
 					test.done()
 
-			setTimeout (=> @client.stop()), 50
+			soon => @client.stop()
 
 	'A callback passed to stop is called once stop is sent to the client':
 		# ... because the stop message will be sent to the client in the initial connection
@@ -1048,9 +1076,30 @@ module.exports = testCase
 					# Just a noop test to increase the 'things tested' count
 					test.ok 1
 	
-	'Client.close() closes the connection': (test) -> test.done()
+	# close() aborts the session immediately. After calling close, subsequent requests to the session
+	# should fail with unknown SID errors.
+	'Client.close() closes the session':
+		'during init': (test) -> @connect ->
+			@client.close()
+			@get "/channel/bind?VER=8&RID=rpc&SID=#{@client.id}&AID=0&TYPE=xmlhttp&CI=0", (res) =>
+				test.strictEqual res.statusCode, 400
+				test.done()
 
-	'The server sends heartbeat messages on the backchannel, which keeps it open': (test) -> test.done()
+		'after init': (test) -> @connect ->
+			process.nextTick =>
+				@client.close()
+
+			@get "/channel/bind?VER=8&RID=rpc&SID=#{@client.id}&AID=0&TYPE=xmlhttp&CI=0", (res) =>
+				test.strictEqual res.statusCode, 400
+				test.done()
+
+	# close() also kills any active backchannel connection.
+	'close kills the active backchannel': (test) -> @connect ->
+		@get "/channel/bind?VER=8&RID=rpc&SID=#{@client.id}&AID=0&TYPE=xmlhttp&CI=0", (res) =>
+			test.done()
+
+		# Give it some time for the backchannel to establish itself
+		soon => @client.close()
 
 	'If a client times out, unacknowledged messages have an error callback called': (test) -> test.done()
 

@@ -346,7 +346,7 @@ module.exports = browserChannel = (options, onConnect) ->
 			# If we haven't sent anything for 15 seconds, we'll send a little `['noop']` to the
 			# client so it knows we haven't forgotten it. (And to make sure the backchannel
 			# connection doesn't time out.)
-			@heartbeat = setTimeout (-> client.send ['noop']), options.keepAliveInterval
+			@heartbeat = setInterval (-> client.send ['noop']), options.keepAliveInterval
 
 		client.refreshSessionTimeout = ->
 			clearTimeout @sessionTimeout
