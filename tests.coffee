@@ -10,25 +10,17 @@
 #
 #     nodeunit tests.coffee
 #
-# I was thinking of using expresso for this, but I'd be starting up a server for
-# every test, and starting the servers in parallel means I might run into the
-# default open file limit (256 on macos) with all my tests. Its a shame too, because
-# nodeunit annoys me sometimes :)
-#
-# It might be worth pulling in a higher level HTTP request library from somewhere.
-# interacting with HTTP using nodejs's http library is a bit lower level than I'd
-# like.
-#
 # For now I'm not going to add in any SSL testing code. I should probably generate
 # a self-signed key pair, start the server using https and make sure that I can
 # still use it.
+#
+# I'm also missing integration tests.
 
 {testCase} = require 'nodeunit'
 connect = require 'connect'
 browserChannel = require('./lib').server
 
 http = require 'http'
-{parse} = require 'url'
 assert = require 'assert'
 querystring = require 'querystring'
 
@@ -54,7 +46,6 @@ expectCalls = (n, callback) ->
 # useful when you want a bunch of mini tests inside one test case.
 makePassPart = (test, n) ->
 	expectCalls n, -> test.done()
-
 
 # Most of these tests will make HTTP requests. A lot of the time, we don't care about the
 # timing of the response, we just want to know what it was. This method will buffer the
@@ -109,15 +100,20 @@ soon = (f) -> setTimeout f, 10
 # ]
 # ```
 #
-# They have a length string (in bytes) followed by some JSON data. Google's
-# implementation doesn't use strict JSON encoding (like above). They can optionally
-# have extra chunks.
+# (At least, thats what they look like using google's server. On mine, they're properly
+# formatted JSON).
+#
+# Each message has a length string (in bytes) followed by a newline and some JSON data.
+# They can optionally have extra chunks afterwards.
 #
 # This format is used for:
 #
 # - All XHR backchannel messages
 # - The response to the initial connect (XHR or HTTP)
 # - The server acknowledgement to forward channel messages
+#
+# This is not used when you're on IE, for normal backchannel requests. On IE, data is sent
+# through javascript calls from an iframe.
 readLengthPrefixedJSON = (res, callback) ->
 	data = ''
 	length = null
