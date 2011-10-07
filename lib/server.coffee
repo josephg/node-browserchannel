@@ -347,16 +347,16 @@ module.exports = browserChannel = (options, onConnect) ->
 		# The server sends messages to the client via a hanging GET request. Of course,
 		# the client has to be the one to open that request.
 		#
-		# This is a handle to that request.
+		# This is a handle to null, or {res, methods, chunk}
+		#
+		# - **res** is the http response object
+		# - **methods** is a map of send(), etc methods for communicating properly with the backchannel -
+		#   this will be different if the request comes from IE or not.
+		# - **chunk** specifies whether or not we're going to keep the connection open across multiple
+		#   messages. If there's a buffering proxy in the way of the connection, we can't respond a bit at
+		#   a time, so we close the backchannel after each data chunk. The client decides this during
+		#   testing and passes a CI= parameter to the server when the backchannel connection is established.
 		backChannel = null
-
-		# ... And we keep a reference to the right set of methods for communicating with the
-		# backchannel. (The methods change if we're in an iframe, etc).
-		backChannelMethods = null
-		
-		# Do we chunk? The client decides whether or not chunking is supported during the
-		# testing phase, and now passes it as a query parameter when the backchannel is opened.
-		chunk = null
 
 		# The server sends data to the client by sending *arrays*. It seems a bit silly that
 		# client->server messages are maps and server->client messages are arrays, but there it is.
@@ -382,12 +382,12 @@ module.exports = browserChannel = (options, onConnect) ->
 
 			clearBackChannel()
 
-			backChannel = res
-			backChannelMethods = messagingMethods query, res
+			backChannel =
+				res: res
+				methods: messagingMethods query, res
+				chunk: query.CI == '0'
 
-			backChannel.connection.once 'close', -> clearBackChannel(res)
-
-			chunk = query.CI == '0'
+			res.connection.once 'close', -> clearBackChannel(res)
 
 			# We'll start the heartbeat interval and clear out the session timeout.
 			# The session timeout will be started again if the backchannel connection closes for
@@ -412,17 +412,17 @@ module.exports = browserChannel = (options, onConnect) ->
 		# This method removes the back channel and any state associated with it. It'll get called
 		# when the backchannel closes naturally, is replaced or when the connection closes.
 		clearBackChannel = (res) ->
+			# clearBackChannel doesn't do anything if we call it repeatedly.
+			return unless backChannel
 			# Its important that we only delete the backchannel if the closed connection is actually
 			# the backchannel we're currently using.
-			return if res? and res != backChannel
-			# This method doesn't do anything if we call it repeatedly.
-			return unless backChannel?
+			return if res? and res != backChannel.res
 
 			# Conveniently, clearTimeout has no effect if the argument is null.
 			clearTimeout heartbeat
 
-			backChannelMethods.end()
-			backChannel = backChannelMethods = null
+			backChannel.methods.end()
+			backChannel = null
 
 			# Whenever we don't have a backchannel, we run the session timeout timer.
 			refreshSessionTimeout()
@@ -609,7 +609,7 @@ module.exports = browserChannel = (options, onConnect) ->
 						data = ([id, data] for {id, data} in arrays)
 
 						# **Away!**
-						backChannelMethods.write JSON.stringify(data) + "\n"
+						backChannel.methods.write JSON.stringify(data) + "\n"
 
 						lastSentArrayId = lastArrayId
 
@@ -620,7 +620,7 @@ module.exports = browserChannel = (options, onConnect) ->
 								a.sendcallback?()
 								delete a.sendcallback
 
-						if !chunk
+						if !backChannel.chunk
 							clearBackChannel()
 
 					# The first backchannel is the client's initial connection. Once we've sent the first
