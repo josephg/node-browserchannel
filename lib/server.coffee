@@ -495,7 +495,7 @@ module.exports = browserChannel = (options, onConnect) ->
 		# Each map has an ID (which starts at 0 when the session is first created). 
 		#
 		# We'll store the ID of the next map the server expects from the client.
-		client.nextMapId = 0
+		nextMapId = 0
 
 		# We'll emit client data to the user immediately if they're in order, but if they're out of order
 		# we'll buffer them up in a dictionary. This will associate id -> {maps:[map]} and id -> {json:[objs]}
@@ -504,27 +504,27 @@ module.exports = browserChannel = (options, onConnect) ->
 		# There's a potential DOS attack here whereby a client could just spam the server with
 		# out-of-order maps until it runs out of memory. We should probably dump a client if there are
 		# too many entries in this dictionary.
-		client.bufferedData = {}
+		bufferedData = {}
 
 		# This method is called whenever we get maps from the client. Offset is the ID of the first
 		# map. The data could either be maps or JSON data. If its maps, data contains {maps} and if its
 		# JSON data, maps contains {JSON}.
-		client.receivedData = (data) ->
+		client._receivedData = (data) ->
 			throw new Error 'No data' unless data.maps? or data.json?
 
 			# The server's response could have been lost in transit. In this case, we might get the data
 			# sent to us twice. We can safely ignore any data with id < nextMapId or data which is
 			# already buffered.
-			return if data.ofs < @nextMapId or @bufferedData[data.ofs]?
+			return if data.ofs < nextMapId or bufferedData[data.ofs]?
 
 			# This puts the offset in the @bufferedData map as well, but its not a big deal.
-			@bufferedData[data.ofs] = data
+			bufferedData[data.ofs] = data
 
 			# Next flush any data, if we can. Its a bit inefficient putting data in a dictionary then
 			# removing it again, but not significantly... and the code is more elegant this way.
-			while (data = @bufferedData[@nextMapId])?
+			while (data = bufferedData[nextMapId])?
 				# We iteratively pop the next data chunk off the bufferedData set.
-				delete @bufferedData[@nextMapId]
+				delete bufferedData[nextMapId]
 
 				# First, classic browserchannel maps.
 				if data.maps
@@ -541,16 +541,16 @@ module.exports = browserChannel = (options, onConnect) ->
 								message = JSON.parse map._JSON
 								@emit 'message', message
 
-					# Its kinda ugly adding another variable for this, but I need to increment @nextMapId by the number
+					# Its kinda ugly adding another variable for this, but I need to increment nextMapId by the number
 					# of records which have been processed.
-					@nextMapId += data.maps.length
+					nextMapId += data.maps.length
 				else
 					# We have data.json. We'll just emit it directly.
 					for message in data.json
 						break if @state is 'closed'
 						@emit 'message', message
 
-					@nextMapId += data.json.length
+					nextMapId += data.json.length
 
 		# When we receive forwardchannel data, we reply with a special little 3-variable array to tell the
 		# client if it should reopen the backchannel.
@@ -592,37 +592,34 @@ module.exports = browserChannel = (options, onConnect) ->
 		#
 		# Each individial message is prefixed by its *array id*, which is a counter starting at 0
 		# when the session is first created and incremented with each array.
-		client.sendTo = (write) ->
-			numUnsentArrays = lastArrayId - lastSentArrayId
-			if numUnsentArrays > 0
-				arrays = outgoingArrays[outgoingArrays.length - numUnsentArrays ...]
 
-				# I've abused outgoingArrays to also contain some callbacks. We only send [id, data] to
-				# the client.
-				data = ([id, data] for {id, data} in arrays)
-
-				# **Away!**
-				write JSON.stringify(data) + "\n"
-
-				lastSentArrayId = lastArrayId
-
-				# Fire any send callbacks on the messages. These callbacks should only be called once.
-				# Again, not sure what to do if there are exceptions here.
-				for a in arrays
-					if a.sendcallback?
-						a.sendcallback?()
-						delete a.sendcallback
-
-			numUnsentArrays
-
-		# Queue the arrays to be sent on the next tick
+		# This will actually send the arrays to the backchannel on the next tick if the backchannel
+		# is alive.
 		client.flush = ->
 			process.nextTick ->
 				if backChannel
-					sentSomething = client.sendTo backChannelMethods.write
+					numUnsentArrays = lastArrayId - lastSentArrayId
+					if numUnsentArrays > 0
+						arrays = outgoingArrays[outgoingArrays.length - numUnsentArrays ...]
 
-					if !chunk and sentSomething
-						clearBackChannel()
+						# I've abused outgoingArrays to also contain some callbacks. We only send [id, data] to
+						# the client.
+						data = ([id, data] for {id, data} in arrays)
+
+						# **Away!**
+						backChannelMethods.write JSON.stringify(data) + "\n"
+
+						lastSentArrayId = lastArrayId
+
+						# Fire any send callbacks on the messages. These callbacks should only be called once.
+						# Again, not sure what to do if there are exceptions here.
+						for a in arrays
+							if a.sendcallback?
+								a.sendcallback?()
+								delete a.sendcallback
+
+						if !chunk
+							clearBackChannel()
 
 					# The first backchannel is the client's initial connection. Once we've sent the first
 					# data chunk to the client, we've officially opened the connection.
@@ -675,11 +672,6 @@ module.exports = browserChannel = (options, onConnect) ->
 				confirmcallback?(new Error message || 'Client closed')
 			
 			delete clients[@id]
-
-		# Remind everybody that the client is still alive and ticking. If the client
-		# doesn't see any traffic for awhile, it'll get deleted and the browser will just have
-		# to reconnect.
-		client.touch = ->
 
 		clients[client.id] = client
 
@@ -798,7 +790,7 @@ module.exports = browserChannel = (options, onConnect) ->
 				bufferPostData req, (data) ->
 					try
 						data = decodeData req, data
-						client.receivedData data if data != null
+						client._receivedData data if data != null
 					catch e
 						console.warn 'Error parsing forward channel', e
 						return sendError res, 400, 'Bad data'
