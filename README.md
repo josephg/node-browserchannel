@@ -33,24 +33,24 @@ Browserchannel is implemented as connect middleware. Here's a chat server:
 browserChannel = require('browserchannel').server
 connect = require 'connect'
 
-clients = []
+sessions = []
 
 server = connect(
 	connect.static "#{__dirname}/public"
-	browserChannel (client) ->
-		console.log "Client #{client.id} connected"
+	browserChannel (session) ->
+		console.log "New session: #{session.id}"
 
-		clients.push client
+		sessions.push session
 
-		client.on 'map', (data) ->
-			console.log "#{client.id} sent #{JSON.stringify data}"
-			# broadcast to all other clients
-			c.send data for c in clients when c != client
+		session.on 'map', (data) ->
+			console.log "#{session.id} sent #{JSON.stringify data}"
+			# broadcast to all other sessions
+			s.send data for s in sessions when s != session
 
-		client.on 'close', (reason) ->
-			console.log "Client #{client.id} disconnected (#{reason})"
-			# Remove the client from the client list
-			clients = (c for c in clients when c != client)
+		session.on 'close', (reason) ->
+			console.log "Session #{session.id} disconnected (#{reason})"
+			# Remove the session from the list
+			sessions = (s for s in sessions when s != session)
 ).listen(4321)
 
 console.log 'Echo server listening on localhost:4321'
