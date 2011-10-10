@@ -824,6 +824,21 @@ module.exports = testCase
 			test.strictEqual gotMessage, true
 			test.done()
 
+	# The client can retry failed forwardchannel requests with additional maps. We may have gotten the failed
+	# request. An error could have occurred when we reply.
+	'Repeat forward channel messages can contain extra maps': (test) -> @connect ->
+		# We should get exactly 2 maps, {v:0} then {v:1}
+		maps = []
+		@session.on 'map', (map) ->
+			maps.push map
+
+		@post "/channel/bind?VER=8&RID=1001&SID=#{@session.id}&AID=0", 'count=1&ofs=0&req0_v=0', (res) =>
+		@post "/channel/bind?VER=8&RID=1001&SID=#{@session.id}&AID=0", 'count=2&ofs=0&req0_v=0&req1_v=1', (res) =>
+
+		soon ->
+			test.deepEqual maps, [{v:0}, {v:1}]
+			test.done()
+
 	# With each request to the server, the client tells the server what array it saw last through the AID= parameter.
 	#
 	# If a client sends a subsequent backchannel request with an old AID= set, that means the client never saw the arrays
@@ -865,6 +880,7 @@ module.exports = testCase
 		# When type=HTML, google's servers still send the same response back to the client. I'm not sure how it detects
 		# the error, but it seems to work. So, I'll copy that behaviour.
 		'backChannel with TYPE=html': (test) -> @get "/channel/bind?VER=8&RID=rpc&SID=madeup&AID=0&TYPE=html&CI=0", testResponse(test)
+
 	# When a client connects, it can optionally specify its old session ID and array ID. This solves the old IRC
 	# ghosting problem - if the old session hasn't timed out on the server yet, you can temporarily be in a state where
 	# multiple connections represent the same user.
@@ -953,6 +969,33 @@ module.exports = testCase
 			test.done()
 
 		timer.waitAll()
+
+	'The session can be disconnected by firing a GET with TYPE=terminate': (test) -> @connect ->
+		# The client doesn't seem to put AID= in here. I'm not sure why - could be a bug in the client.
+		@get "/channel/bind?VER=8&RID=1001&SID=#{@session.id}&TYPE=terminate", (res) ->
+			# The response should be empty.
+			buffer res, (data) -> test.strictEqual data, ''
+
+		@session.on 'close', (reason) ->
+			# ... Its a manual disconnect. Is this reason string good enough?
+			test.strictEqual reason, 'Disconnected'
+			test.done()
+
+	'If a disconnect message reaches the client before some data, the data is still received': (test) -> @connect ->
+		# The disconnect message is sent first, but its got a higher RID. It shouldn't be handled until
+		# after the data.
+		@get "/channel/bind?VER=8&RID=1003&SID=#{@session.id}&TYPE=terminate", (res) ->
+		soon =>
+			@post "/channel/bind?VER=8&RID=1002&SID=#{@session.id}&AID=0", 'count=1&ofs=1&req0_m=2', (res) =>
+			@post "/channel/bind?VER=8&RID=1001&SID=#{@session.id}&AID=0", 'count=1&ofs=0&req0_m=1', (res) =>
+
+		maps = []
+		@session.on 'map', (data) ->
+			maps.push data
+		@session.on 'close', (reason) ->
+			test.strictEqual reason, 'Disconnected'
+			test.deepEqual maps, [{m:1}, {m:2}]
+			test.done()
 
 	# There's a slightly different codepath after a backchannel is opened then closed again. I want to make
 	# sure it still works in this case.
@@ -1069,6 +1112,21 @@ module.exports = testCase
 					test.done()
 
 				@session.close 'foo'
+
+		# Finally, the server closes a connection when the client actively closes it (by firing a GET with TYPE=terminate)
+		'when the server gets a disconnect request': (test) -> @connect ->
+			@session.send 'hello there', (error) ->
+				test.ok error
+				test.strictEqual error.message, 'Disconnected'
+
+			process.nextTick =>
+				@session.send 'hi', (error) ->
+					test.ok error
+					test.strictEqual error.message, 'Disconnected'
+					test.expect 4
+					test.done()
+
+			@get "/channel/bind?VER=8&RID=1001&SID=#{@session.id}&TYPE=terminate", (res) ->
 
 	'If a session has close() called with no arguments, the send error message says "closed"': (test) -> @connect ->
 		@session.send 'hello there', (error) ->

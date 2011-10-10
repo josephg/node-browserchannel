@@ -263,6 +263,39 @@ decodeData = (req, data) ->
 
 		{ofs, maps}
 
+# This is a helper method to order the handling of messages / requests / whatever.
+#
+# Use it like this:
+# inOrder = order 0
+#
+# inOrder 1, -> console.log 'second'
+# inOrder 0, -> console.log 'first'
+#
+# Start is the ID of the first element we expect to receive. If we get data for earlier
+# elements, we'll play them anyway if playOld is truthy.
+order = (start, playOld) ->
+	# Base is the ID of the (missing) element at the start of the queue
+	base = start
+	# The queue will start with about 10 elements. Elements of the queue are undefined
+	# if we don't have data for that queue element.
+	queue = new Array 10
+
+	(seq, callback) ->
+		# Its important that all the cells of the array are truthy if we have data. We'll use an
+		# empty function instead of null.
+		callback or= ->
+
+		# Ignore old messages, or play them back immediately if playOld=true
+		if seq < base
+			callback() if playOld
+		else
+			queue[seq - base] = callback
+
+			while queue[0]
+				callback = queue.shift()
+				base++
+				callback()
+
 # ---
 #
 # # The server middleware
@@ -308,7 +341,9 @@ module.exports = browserChannel = (options, onConnect) ->
 	#
 	# Sometimes a client will specify an old session ID and old array ID. In this case, the client
 	# is reconnecting and we should evict the named session (if it exists).
-	createSession = (address, appVersion, oldSessionId, oldArrayId) ->
+	createSession = (address, query) ->
+		{RID:initialRid, CVER:appVersion, OSID:oldSessionId, OAID:oldArrayId} = query
+
 		if oldSessionId? and (oldSession = sessions[oldSessionId])
 			oldSession._acknowledgeArrays oldArrayId
 			oldSession.close 'Reconnected'
@@ -378,8 +413,6 @@ module.exports = browserChannel = (options, onConnect) ->
 		# the HTTP request code below. The _ at the start will hopefully make people think twice
 		# before using it.
 		session._setBackChannel = (res, query) ->
-			throw new Error 'Invalid backchannel headers' unless query.RID == 'rpc'
-
 			clearBackChannel()
 
 			backChannel =
@@ -495,64 +528,74 @@ module.exports = browserChannel = (options, onConnect) ->
 		# before emitting them to the user.
 		#
 		# Each map has an ID (which starts at 0 when the session is first created). 
-		#
-		# We'll store the ID of the next map the server expects from the client.
-		nextMapId = 0
 
 		# We'll emit received data to the user immediately if they're in order, but if they're out of order
-		# we'll buffer them up in a dictionary. This will associate id -> {maps:[map]} and id -> {json:[objs]}
-		# for client data which has been received but haven't been emitted yet. This is a sparse set.
+		# we'll use the little order helper above to order them. The order helper is instructed to not
+		# emit any old messages twice.
 		#
 		# There's a potential DOS attack here whereby a client could just spam the server with
 		# out-of-order maps until it runs out of memory. We should dump a session if there are
 		# too many entries in this dictionary.
-		bufferedData = {}
+		mapBuffer = order 0, false
 
 		# This method is called whenever we get maps from the client. Offset is the ID of the first
 		# map. The data could either be maps or JSON data. If its maps, data contains {maps} and if its
 		# JSON data, maps contains {JSON}.
-		session._receivedData = (data) ->
-			throw new Error 'No data' unless data.maps? or data.json?
+		#
+		# Browserchannel has 2 different mechanisms for consistantly ordering messages in the forward channel:
+		#
+		# - Each forward channel request contains a request ID (RID=X), which start at a random value
+		#   (set with the first session create packet). These increment by 1 with each request.
+		#
+		#   If a request fails, it might be retried with the same RID as the previous message, and with extra
+		#   maps tacked on the end. We need to handle the maps in this case.
+		#
+		# - Each map has an ID, counting from 0. ofs= in the POST data tells the server the ID of the first
+		#   map in a request.
+		#
+		# As far as I can tell, the RID stuff can mostly be ignored. The one place it is important is in
+		# handling disconnect messages. The session should only be disconnected by a disconnect message when
+		# the preceeding messages have been received.
 
-			# The server's response could have been lost in transit. In this case, we might get the data
-			# sent to us twice. We can safely ignore any data with id < nextMapId or data which is
-			# already buffered.
-			return if data.ofs < nextMapId or bufferedData[data.ofs]?
+		# All requests are handled in order too, though if not for disconnecting I don't think it would matter.
+		# Because of the funky retry-has-extra-maps logic, we'll allow processing requests twice.
+		ridBuffer = order initialRid, true
 
-			# This puts the offset in the @bufferedData map as well, but its not a big deal.
-			bufferedData[data.ofs] = data
+		session._receivedData = (rid, data) ->
+			ridBuffer rid, ->
+				return if data is null
+				throw new Error 'Invalid data' unless data.maps? or data.json?
 
-			# Next flush any data, if we can. Its a bit inefficient putting data in a dictionary then
-			# removing it again, but not significantly... and the code is more elegant this way.
-			while (data = bufferedData[nextMapId])?
-				# We iteratively pop the next data chunk off the bufferedData set.
-				delete bufferedData[nextMapId]
+				ridBuffer rid
+				id = data.ofs
 
 				# First, classic browserchannel maps.
 				if data.maps
 					# If an exception is thrown during this loop, I'm not really sure what the behaviour should be.
 					for map in data.maps
-						break if @state is 'closed'
+						# The funky do expression here is used to pass the map into the closure.
+						# Another way to do it is to index into the data.maps array inside the function, but then I'd
+						# need to pass the index to the closure anyway.
+						mapBuffer id++, do (map) -> ->
+							return if session.state is 'closed'
 
-						@emit 'map', map
+							session.emit 'map', map
 
-						# If you specify the key as _JSON, the server will try to decode JSON data from the map and emit
-						# 'message'. This is a much nicer way to message the server.
-						if map._JSON?
-							try
-								message = JSON.parse map._JSON
-								@emit 'message', message
-
-					# Its kinda ugly adding another variable for this, but I need to increment nextMapId by the number
-					# of records which have been processed.
-					nextMapId += data.maps.length
+							# If you specify the key as _JSON, the server will try to decode JSON data from the map and emit
+							# 'message'. This is a much nicer way to message the server.
+							if map._JSON?
+								try
+									message = JSON.parse map._JSON
+									session.emit 'message', message
 				else
 					# We have data.json. We'll just emit it directly.
 					for message in data.json
-						break if @state is 'closed'
-						@emit 'message', message
+						mapBuffer id++, do (map) -> ->
+							return if session.state is 'closed'
+							session.emit 'message', message
 
-					nextMapId += data.json.length
+		session._disconnectAt = (rid) ->
+			ridBuffer rid, -> session.close 'Disconnected'
 
 		# When we receive forwardchannel data, we reply with a special little 3-variable array to tell the
 		# client if it should reopen the backchannel.
@@ -772,25 +815,25 @@ module.exports = browserChannel = (options, onConnect) ->
 				# For some reason, google replies with the same response on HTTP and HTML requests here.
 				# I'll follow suit, though its a little weird. Maybe I should do the same with all client
 				# errors?
-				return sendError res, 400, 'Unknown SID' unless session?
+				return sendError res, 400, 'Unknown SID' unless session
 
 			session._acknowledgeArrays query.AID if query.AID? and session
 
-			#### Forward Channel
+			# ### Forward Channel
 			if req.method == 'POST'
 				if session == undefined
 					
 					# The session is new! Make them a new session object and let the
 					# application know.
-					session = createSession req.connection.remoteAddress, query.CVER, query.OSID, query.OAID
+					session = createSession req.connection.remoteAddress, query
 					onConnect? session
 
 				bufferPostData req, (data) ->
 					try
 						data = decodeData req, data
-						session._receivedData data if data != null
+						session._receivedData query.RID, data
 					catch e
-						console.warn 'Error parsing forward channel', e
+						console.warn 'Error parsing forward channel', e.stack
 						return sendError res, 400, 'Bad data'
 
 					res.writeHead 200, 'OK', standardHeaders
@@ -808,13 +851,24 @@ module.exports = browserChannel = (options, onConnect) ->
 						response = JSON.stringify session._backChannelStatus()
 						res.end "#{response.length}\n#{response}"
 
-			#### Back Channel
-			else if req.method == 'GET'
-				throw new Error 'invalid SID' if typeof query.SID != 'string' && query.SID.length < 5
-				throw new Error 'Session not specified' unless session?
-				#console.log 'Back channel:', query
-				writeHead()
-				session._setBackChannel res, query
+			else if req.method is 'GET'
+				# ### Back channel
+				#
+				# GET messages are usually backchannel requests (server->client). Backchannel messages are handled
+				# by the session object.
+				if query.TYPE in ['xmlhttp', 'html']
+					return sendError res, 400, 'Invalid SID' if typeof query.SID != 'string' && query.SID.length < 5
+					return sendError res, 400, 'Expected RPC' unless query.RID is 'rpc'
+					writeHead()
+					session._setBackChannel res, query
+				# The client can manually disconnect by making a GET request with TYPE='terminate'
+				else if query.TYPE is 'terminate'
+					# We don't send any data in the response to the disconnect message.
+					#
+					# The client implements this using an img= appended to the page.
+					session?._disconnectAt query.RID
+					res.writeHead 200, 'OK', standardHeaders
+					res.end()
 
 			else
 				res.writeHead 405, 'Method Not Allowed', standardHeaders
@@ -830,4 +884,4 @@ module.exports = browserChannel = (options, onConnect) ->
 # This will override the timer methods (`setInterval`, etc) with the testing stub versions,
 # which are way faster.
 browserChannel._setTimerMethods = (methods) ->
-    {setInterval, clearInterval, setTimeout, clearTimeout, Date} = methods
+	{setInterval, clearInterval, setTimeout, clearTimeout, Date} = methods
