@@ -6,9 +6,9 @@
 #
 #     npm install -g nodeunit
 #
-# then run the tests with:
+# then run the server tests with:
 #
-#     nodeunit tests.coffee
+#     nodeunit test/server.coffee
 #
 # For now I'm not going to add in any SSL testing code. I should probably generate
 # a self-signed key pair, start the server using https and make sure that I can
@@ -17,8 +17,6 @@
 # I'm also missing integration tests.
 
 {testCase} = require 'nodeunit'
-connect = require 'connect'
-browserChannel = require('./lib').server
 
 http = require 'http'
 assert = require 'assert'
@@ -26,7 +24,10 @@ querystring = require 'querystring'
 
 timer = require 'timerstub'
 
+browserChannel = require('..').server
 browserChannel._setTimerMethods timer
+
+{createServer} = require './helpers'
 
 # Wait for the function to be called a given number of times, then call the callback.
 #
@@ -147,40 +148,6 @@ e0daf1a178fc0f58cd309308fba7e6f011ac38c9cdd4580760f1d4560a84d5ca0355ecbbed2ab715
 9050640bd0e77acec90c58c4d3dd0f5cf8d4510e68c8b12e087bd88cad349aafd2ab16b07b0b1b8276091217a44
 a9fe92fedacffff48092ee693af\n"
 
-# Most tests will just use the default configuration of browserchannel, but obviously
-# some tests will need to customise the options. To customise the options we'll need
-# to create a new server object.
-#
-# So, the code to create servers has been pulled out here for use in tests.
-createServer = (opts, method, callback) ->
-	# Its possible to use the browserChannel middleware without specifying an options
-	# object. This little createServer function will mirror that behaviour.
-	if typeof opts == 'function'
-		callback = method
-		method = opts
-		# I want to match up with how its actually going to be used.
-		bc = browserChannel method
-	else
-		bc = browserChannel opts, method
-	
-	# The server is created using connect middleware. I'll simulate other middleware in
-	# the stack by adding a second handler which responds with 200, 'Other middleware' to
-	# any request.
-	server = connect bc, (req, res, next) ->
-		# I might not actually need to specify the headers here... (If you don't, nodejs provides
-		# some defaults).
-		res.writeHead 200, 'OK', 'Content-Type': 'text/plain'
-		res.end 'Other middleware'
-
-	# Calling server.listen() without a port lets the OS pick a port for us. I don't
-	# know why more testing frameworks don't do this by default.
-	server.listen ->
-		# Obviously, we need to know the port to be able to make requests from the server.
-		# The callee could check this itself using the server object, but it'll always need
-		# to know it, so its easier pulling the port out here.
-		port = server.address().port
-		callback server, port
-
 module.exports = testCase
 	# #### setUp
 	#
@@ -249,7 +216,24 @@ module.exports = testCase
 		# like this.
 		@server.on 'close', callback
 		@server.close()
-	
+
+	# The server hosts the client-side javascript at /channel.js. It should have headers set to tell
+	# browsers its javascript.
+	#
+	# Its self contained, with no dependancies on anything. It would be nice to test it as well,
+	# but we'll do that elsewhere.
+	'The javascript is hosted at /channel.js': (test) ->
+		@get '/channel/channel.js', (response) ->
+			test.strictEqual response.statusCode, 200
+			test.strictEqual response.headers['content-type'], 'application/javascript'
+			test.ok response.headers['etag']
+			console.log response.headers['etag']
+			buffer response, (data) ->
+				# Its about 47k. If the size changes too drastically, I want to know about it.
+				test.ok data.length > 45000
+				test.ok data.length < 50000
+				test.done()
+
 	# # Testing channel tests
 	#
 	# The first thing a client does when it connects is issue a GET on /test/?mode=INIT.
@@ -397,6 +381,13 @@ module.exports = testCase
 			'''<script>try {parent.m("2")} catch(e) {}</script>
 <script>try  {parent.d(); }catch (e){}</script>\n''')
 	
+	# IE doesn't parse the HTML in the response unless the Content-Type is text/html
+	'Using type=html sets Content-Type: text/html': (test) ->
+		r = @get "/channel/test?VER=8&TYPE=html", (response) ->
+			test.strictEqual response.headers['content-type'], 'text/html'
+			r.abort()
+			test.done()
+
 	# node-browserchannel is only compatible with browserchannel client version 8. I don't know whats changed
 	# since old versions (maybe v6 would be easy to support) but I don't care. If the client specifies
 	# an old version, we'll die with an error.
@@ -1243,7 +1234,7 @@ module.exports = testCase
 	#
 	# To make everything nicer, I have two changes to browserchannel:
 	#
-	# - If a map is `{_JSON:"<JSON STRING>"}`, the server will automatically parse the JSON string and
+	# - If a map is `{JSON:"<JSON STRING>"}`, the server will automatically parse the JSON string and
 	#   emit 'message', object. In this case, the server *also* emits the data as a map.
 	# - The client can POST the forwardchannel data using a JSON blob. The message looks like this:
 	#
@@ -1252,10 +1243,10 @@ module.exports = testCase
 	#   In this case, the server *does not* emit a map, but merely emits the json object using emit 'message'.
 	#
 	#   To advertise this service, during the first test, the server sends X-Accept: application/json; ...
-	'The server decodes JSON data in a map if it has a _JSON key': (test) -> @connect ->
+	'The server decodes JSON data in a map if it has a JSON key': (test) -> @connect ->
 		data1 = [{}, {'x':null}, 'hi', '!@#$%^&*()-=', '\'"']
 		data2 = "hello dear user"
-		qs = querystring.stringify count: 2, ofs: 0, req0__JSON: (JSON.stringify data1), req1__JSON: (JSON.stringify data2)
+		qs = querystring.stringify count: 2, ofs: 0, req0_JSON: (JSON.stringify data1), req1_JSON: (JSON.stringify data2)
 		# I can guarantee qs is awful.
 		@post "/channel/bind?VER=8&RID=1001&SID=#{@session.id}&AID=0", qs, (res) =>
 
@@ -1270,16 +1261,16 @@ module.exports = testCase
 	'The server emits JSON data in a map, as a map as well': (test) -> @connect ->
 		data1 = [{}, {'x':null}, 'hi', '!@#$%^&*()-=', '\'"']
 		data2 = "hello dear user"
-		qs = querystring.stringify count: 2, ofs: 0, req0__JSON: (JSON.stringify data1), req1__JSON: (JSON.stringify data2)
+		qs = querystring.stringify count: 2, ofs: 0, req0_JSON: (JSON.stringify data1), req1_JSON: (JSON.stringify data2)
 		@post "/channel/bind?VER=8&RID=1001&SID=#{@session.id}&AID=0", qs, (res) =>
 
 		# I would prefer to have more tests mixing maps and JSON data. I'm better off testing that
 		# thoroughly using a randomized tester.
 		@session.once 'map', (map) =>
-			test.deepEqual map, _JSON: JSON.stringify data1
+			test.deepEqual map, JSON: JSON.stringify data1
 
 			@session.once 'map', (map) ->
-				test.deepEqual map, _JSON: JSON.stringify data2
+				test.deepEqual map, JSON: JSON.stringify data2
 				test.done()
 
 	# The server also accepts raw JSON.

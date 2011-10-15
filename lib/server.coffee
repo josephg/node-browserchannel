@@ -23,6 +23,8 @@
 {parse} = require 'url'
 # `querystring` will help decode the URL-encoded forward channel data
 querystring = require 'querystring'
+# `fs` is used to read & serve the client library
+fs = require 'fs'
 
 # Client sessions are `EventEmitters
 {EventEmitter} = require 'events'
@@ -295,6 +297,34 @@ order = (start, playOld) ->
 				callback = queue.shift()
 				base++
 				callback()
+
+# We need access to the client's sourcecode. I'm going to get it using a synchronous file call
+# (it'll be fast anyway, and only happen once).
+#
+# I'm also going to set an etag on the client data so the browser client will be cached. I'm kind of
+# uncomfortable about adding complexity here because its not like this code hasn't been written
+# before, but.. I think a lot of people will use this API.
+#
+# I should probably look into hosting the client code as a javascript module using that client-side
+# npm thing.
+clientFile = "#{__dirname}/channel.js"
+clientStats = fs.statSync clientFile
+try
+	clientCode = fs.readFileSync clientFile, 'utf8'
+catch e
+	console.error 'Could not load the client javascript. Run `cake client` to generate it.'
+	throw e
+
+# This is mostly to help development, but if the client is recompiled, I'll pull in a new version.
+# This isn't tested by the unit tests - but its not a big deal.
+fs.watchFile clientFile, persistent: false, (curr, prev) ->
+	if curr.mtime != prev.mtime
+		# Putting a synchronous file call here will stop the whole server while the client is reloaded.
+		# Again, this will only happen during development so its not a big deal.
+		console.log 'Reloading client JS'
+		clientCode = fs.readFileSync clientFile, 'utf8'
+		clientStats = curr
+
 
 # ---
 #
@@ -581,11 +611,11 @@ module.exports = browserChannel = (options, onConnect) ->
 
 							session.emit 'map', map
 
-							# If you specify the key as _JSON, the server will try to decode JSON data from the map and emit
+							# If you specify the key as JSON, the server will try to decode JSON data from the map and emit
 							# 'message'. This is a much nicer way to message the server.
-							if map._JSON?
+							if map.JSON?
 								try
-									message = JSON.parse map._JSON
+									message = JSON.parse map.JSON
 									session.emit 'message', message
 				else
 					# We have data.json. We'll just emit it directly.
@@ -737,13 +767,34 @@ module.exports = browserChannel = (options, onConnect) ->
 
 		{writeHead, write, writeRaw, end, writeError} = messagingMethods query, res
 
+		# # Serving the client
+		#
+		# The browserchannel server hosts a usable web client library at /channel/channel.js.
+		# This library includes (and wraps) the google closure library client implementation.
+		#
+		# If I have time, I would like to write my own version of the client to add a few features
+		# (websockets, message acknowledgement callbacks) and do some manual optimisations for speed.
+		# However, the current version works ok.
+		if pathname is "#{base}/channel.js"
+			etag = "\"#{clientStats.size}-#{clientStats.mtime.getTime()}\""
+			res.writeHead 200, 'OK',
+				'Content-Type': 'application/javascript',
+				'ETag': etag,
+				'Content-Length': clientCode.length
+			# This code is manually tested because it looks like its impossible to send HEAD requests
+			# using nodejs's HTTP library at time of writing (0.4.12). (Yeah, I know, rite?)
+			if req.method is 'HEAD'
+				res.end()
+			else
+				res.end clientCode
+
 		# # Connection testing
 		#
 		# Before the browserchannel client connects, it tests the connection to make
 		# sure its working, and to look for buffering proxies.
 		#
 		# The server-side code for connection testing is completely stateless.
-		if pathname == "#{base}/test"
+		else if pathname is "#{base}/test"
 			# This server only supports browserchannel protocol version **8**.
 			# I have no idea if 400 is the right error here.
 			return sendError res, 400, 'Version 8 required' unless query.VER is '8'
