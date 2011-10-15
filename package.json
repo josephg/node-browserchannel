@@ -13,7 +13,7 @@
     "node": "~0.4"
   },
   "scripts": {
-    "test": "nodeunit tests.coffee"
+    "test": "nodeunit test/server.coffee"
   },
   "dependencies": {
     "coffee-script": "~1",
