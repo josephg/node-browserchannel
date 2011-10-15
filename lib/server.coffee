@@ -318,10 +318,10 @@ catch e
 # This is mostly to help development, but if the client is recompiled, I'll pull in a new version.
 # This isn't tested by the unit tests - but its not a big deal.
 fs.watchFile clientFile, persistent: false, (curr, prev) ->
-	if curr.mtime != prev.mtime
+	if curr.mtime.getTime() != prev.mtime.getTime()
 		# Putting a synchronous file call here will stop the whole server while the client is reloaded.
 		# Again, this will only happen during development so its not a big deal.
-		console.log 'Reloading client JS'
+		console.log "Reloading client JS"
 		clientCode = fs.readFileSync clientFile, 'utf8'
 		clientStats = curr
 
