@@ -230,8 +230,8 @@ module.exports = testCase
       console.log response.headers['etag']
       buffer response, (data) ->
         # Its about 47k. If the size changes too drastically, I want to know about it.
-        test.ok data.length > 45000
-        test.ok data.length < 50000
+        test.ok data.length > 45000, "Client is unusually small (#{data.length} bytes)"
+        test.ok data.length < 50000, "Client is bloaty (#{data.length} bytes)"
         test.done()
 
   # # Testing channel tests

@@ -44,10 +44,7 @@ function compile(code, opts, next) {
           output_info: ['errors', 'warnings', 'compiled_code', 'statistics'],
           warning_level: 'VERBOSE',
 					use_closure_library: true
-          ,code_url: 'http://closure-library.googlecode.com/svn/trunk/closure/goog/net/browserchannel.js'
-          // Uncomment this to enable pretty-printing of the compiled output
-          , formatting: 'pretty_print'
-        }
+    }
 	  if (typeof(opts) !== 'object') {
 		  next = opts;
 		  opts = {};

@@ -75,10 +75,15 @@ Channel = (url, appVersion, prepare) ->
   # We'll cache the error so a 'disconnect' handler knows the disconnect reason.
   closeReason = null
 
+  @setState = (newState) ->
+    #console?.log "state #{@state} -> #{newState}"
+    return if newState is @state
+    @state = newState
+    @emit 'state', newState
+
   handler.channelOpened = (channel) =>
     console?.warn "channelOpened in state #{@state}" unless @state is 'connecting'
-    console?.log "state #{@state} -> connected"
-    @state = 'connected'
+    @setState 'connected'
     lastSession = session
     @emit 'connected'
 
@@ -86,12 +91,13 @@ Channel = (url, appVersion, prepare) ->
   # called only once, just before channelClosed(). It is not called if the session is manually
   # disconnected.
   handler.channelError = (channel, errCode) =>
-    console.error 'channelError', closeReason
+    console?.error 'channelError', closeReason
     closeReason = errorMessages[errCode]
     @emit 'error', closeReason, errCode
 
   handler.channelClosed = (channel, pendingMaps, undeliveredMaps) =>
-    console.error 'channelClosed'
+    #console.error 'channelClosed'
+
     # Hm.
     #
     # I'm not sure what to do with this potentially-undelivered data. I think I'll toss it
@@ -102,9 +108,8 @@ Channel = (url, appVersion, prepare) ->
     # For the connection repeater, we'll probably deal with it in the connection handler.
     undelivered = if pendingMaps then pendingMaps.concat undeliveredMaps else []
 
-    console?.log "state #{@state} -> waiting"
     # Should handle server stop
-    @state = 'waiting'
+    @setState 'waiting'
     @emit 'disconnect', closeReason, undelivered
     reconnectTimer = setTimeout (-> reconnect(); reconnectTimer = null), 3000
     @['reconnectTime'] = Date.now()
@@ -115,8 +120,7 @@ Channel = (url, appVersion, prepare) ->
 
   reconnect = =>
     console?.warn "reconnect from state #{@state}" unless @state is 'waiting'
-    console?.log "state #{@state} -> preparing"
-    @state = 'preparing'
+    @setState 'preparing'
     clearTimeout reconnectTimer
     @emit 'preparing'
     # I'm not actually sure if I need to make a new BC session here...
@@ -128,9 +132,8 @@ Channel = (url, appVersion, prepare) ->
     #session.setChannelDebug(new goog.net.ChannelDebug())
 
     prepare =>
-      console?.log 'calling connect()'
-      console?.log "state #{@state} -> connecting"
-      @state = 'connecting'
+      #console?.log 'calling connect()'
+      @setState 'connecting'
       @emit 'connecting'
       session.connect "#{url}/test", "#{url}/bind", null,
         lastSession?.getSessionId(), lastSession?.getLastArrayId()
@@ -138,15 +141,13 @@ Channel = (url, appVersion, prepare) ->
   reconnectTimer = null
 
   @['connect'] = @connect = =>
-    console?.log "state #{@state} -> stopped"
-    @state = 'waiting' if @state is 'stopped'
+    @setState 'waiting' if @state is 'stopped'
     reconnect()
 
   @['disconnect'] = @disconnect = =>
     clearTimeout reconnectTimer
-    console?.log "disconnect() in state #{@state}"
-    console?.log "state #{@state} -> stopped"
-    @state = 'stopped'
+    #console?.log "disconnect() in state #{@state}"
+    @setState 'stopped'
     session.disconnect()
 
   # I really want @send to take a callback which is called when the message is either confirmed

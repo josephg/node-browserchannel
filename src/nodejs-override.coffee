@@ -7,7 +7,8 @@ goog.net.tmpnetwork.testLoadImage = (url, timeout, callback) ->
   # If the url looks like '//www.google.com/.....' then prepend http: on the front.
   if url.match /^\/\//
     url = 'http:' + url
-  console.warn 'testLoadImage', url
+
+  #console.warn 'testLoadImage', url
 
   done = false
   setTimeout ->

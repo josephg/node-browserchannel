@@ -9,7 +9,15 @@ assemble = (files, out) ->
     js = coffeescript.compile coffee, {f, bare:true}
 
   code = code.join ''
-  closure.compile code, (err, code) ->
+
+  # There's fixes in the SVN head for browserchannel which remove strict dependancies on window.location
+  # if the URL is absolute.
+  options =
+    code_url: 'http://closure-library.googlecode.com/svn/trunk/closure/goog/net/browserchannel.js'
+    # This enables readable output.
+#    formatting: 'pretty_print'
+
+  closure.compile code, options, (err, code) ->
     fs.writeFileSync out, code
 
 task 'client', 'Build the closure client into a compiled JS file', ->
