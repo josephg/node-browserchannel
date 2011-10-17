@@ -2,18 +2,17 @@ fs = require 'fs'
 coffeescript = require 'coffee-script'
 closure = require './closure-compile'
 
-compile = (input, outfile) ->
-	# Closure compile the JS
-	closure.compile input, (err, code) ->
-		throw err if err?
+assemble = (files, out) ->
+  code = for f in files
+    f = "#{__dirname}/lib/#{f}.coffee"
+    coffee = fs.readFileSync f, 'utf8'
+    js = coffeescript.compile coffee, {f, bare:true}
 
-		output = outfile
-		fs.writeFileSync output, "(function(){\n#{code}})();"
+  code = code.join ''
+  closure.compile code, (err, code) ->
+    fs.writeFileSync out, code
 
 task 'client', 'Build the closure client into a compiled JS file', ->
-	filename = "#{__dirname}/lib/closure.coffee"
-	code = fs.readFileSync filename, 'utf8'
-	code = coffeescript.compile code, {filename, bare:true}
-	fs.writeFileSync 'foo.js', code
-	compile code, "#{__dirname}/lib/channel.js"
+  assemble ['microevent', 'channel'], "lib/channel.js"
+  assemble ['microevent', 'channel', 'nodejs-override'], "lib/node-channel.js"
 

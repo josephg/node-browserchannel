@@ -5,60 +5,15 @@
 
 # Aaah closure... This tells the closure compiler which libraries the code here needs to be
 # compiled wtih.
-goog.require 'goog.net.BrowserChannel'
-goog.require 'goog.net.BrowserChannel.Handler'
-goog.require 'goog.net.BrowserChannel.Error'
-goog.require 'goog.net.BrowserChannel.State'
+#goog.require 'goog.net.BrowserChannel'
+#goog.require 'goog.net.BrowserChannel.Handler'
+#goog.require 'goog.net.BrowserChannel.Error'
+#goog.require 'goog.net.BrowserChannel.State'
+
 #goog.require 'goog.net.ChannelDebug'
 
 # We'll use closure's JSON serializer because IE doesn't come with a JSON serializer / parser.
 goog.require 'goog.json'
-
-WEB = typeof window isnt 'undefined'
-
-# This is a simple port of microevent.js to Coffeescript. I've changed the
-# function names to be consistent with node.js EventEmitter.
-#
-# microevent.js is copyright Jerome Etienne, and licensed under the MIT license:
-# https://github.com/jeromeetienne/microevent.js
-
-nextTick = if WEB? then (fn) -> setTimeout fn, 0 else process['nextTick']
-
-class MicroEvent
-	on: (event, fct) ->
-		@_events ||= {}
-		@_events[event] ||= []
-		@_events[event].push(fct)
-		this
-
-	removeListener: (event, fct) ->
-		@_events ||= {}
-		listeners = (@_events[event] ||= [])
-		
-		# Sadly, there's no IE8- support for indexOf.
-		i = 0
-		while i < listeners.length
-			listeners[i] = undefined if listeners[i] == fct
-			i++
-
-		nextTick => @_events[event] = (x for x in @_events[event] when x)
-
-		this
-
-	emit: (event, args...) ->
-		return this unless @_events?[event]
-		fn.apply this, args for fn in @_events[event] when fn
-		this
-
-# mixin will delegate all MicroEvent.js function in the destination object
-MicroEvent.mixin = (obj) ->
-	proto = obj.prototype || obj
-
-	# Damn closure compiler :/
-	proto['on'] = proto.on = MicroEvent.prototype.on
-	proto['removeListener'] = proto.removeListener = MicroEvent.prototype.removeListener
-	proto['emit'] = proto.emit = MicroEvent.prototype.emit
-	obj
 
 # Closure uses numerical error codes. We'll translate them into strings for the user.
 errorMessages = {}
@@ -69,14 +24,20 @@ errorMessages[goog.net.BrowserChannel.Error.STOP] = 'Stopped by server'
 
 # All of these error messages basically boil down to "Something went wrong - try again". I can't
 # imagine using different logic on the client based on the error here - just keep reconnecting.
+
+# The client's internet is down (ping to google failed)
 errorMessages[goog.net.BrowserChannel.Error.NETWORK] = 'General network error'
+# The server could not be contacted
 errorMessages[goog.net.BrowserChannel.Error.REQUEST_FAILED] = 'Request failed'
-errorMessages[goog.net.BrowserChannel.Error.NO_DATA] = 'No data from server' # We got an invalid server response
+
 # This error happens when the client can't connect to the special test domain. In my experience,
 # this error happens normally sometimes as well - if one particular connection doesn't
 # make it through during the channel test. This will never happen with node-browserchannel anyway
 # because we don't support the network admin blocking channel.
 errorMessages[goog.net.BrowserChannel.Error.BLOCKED] = 'The channel has been blocked by a network administrator'
+
+# We got an invalid response from the server
+errorMessages[goog.net.BrowserChannel.Error.NO_DATA] = 'No data from server'
 errorMessages[goog.net.BrowserChannel.Error.BAD_DATA] = 'Got bad data from the server'
 errorMessages[goog.net.BrowserChannel.Error.BAD_RESPONSE] = 'Got a bad response from the server'
 
@@ -109,6 +70,10 @@ Channel = (url, appVersion, prepare) ->
 
 	# A handler is used to receive events back out of the session.
 	handler = new goog.net.BrowserChannel.Handler()
+
+	# If there's an error, the handler's channelError() method is called right before channelClosed().
+	# We'll cache the error so a 'disconnect' handler knows the disconnect reason.
+	closeReason = null
 
 	handler.channelOpened = (channel) =>
 		console?.warn "channelOpened in state #{@state}" unless @state is 'connecting'
@@ -151,12 +116,13 @@ Channel = (url, appVersion, prepare) ->
 	reconnect = =>
 		console?.warn "reconnect from state #{@state}" unless @state is 'waiting'
 		console?.log "state #{@state} -> preparing"
-		clearTimeout reconnectTimer
 		@state = 'preparing'
+		clearTimeout reconnectTimer
 		@emit 'preparing'
 		# I'm not actually sure if I need to make a new BC session here...
 		session = new goog.net.BrowserChannel appVersion
 		session.setHandler handler
+		closeReason = null
 
 		# Only needed for debugging..
 		#session.setChannelDebug(new goog.net.ChannelDebug())
@@ -172,10 +138,9 @@ Channel = (url, appVersion, prepare) ->
 	reconnectTimer = null
 
 	@['connect'] = @connect = =>
+		console?.log "state #{@state} -> stopped"
 		@state = 'waiting' if @state is 'stopped'
 		reconnect()
-
-	closeReason = null
 
 	@['disconnect'] = @disconnect = =>
 		clearTimeout reconnectTimer
@@ -196,5 +161,5 @@ Channel = (url, appVersion, prepare) ->
 
 MicroEvent.mixin Channel
 
-(if WEB then window else exports)['Channel'] = Channel
+(exports ? window)['Channel'] = Channel
 
