@@ -13,13 +13,13 @@ assert = require 'assert'
 #browserChannel._setTimerMethods timer
 
 module.exports = testCase
-	setUp: (callback) ->
-		@onSession = (session) ->
-		createServer ((session) => @onSession session), (@server, @port) =>
-			callback()
+  setUp: (callback) ->
+    @onSession = (session) ->
+    createServer ((session) => @onSession session), (@server, @port) =>
+      callback()
 
-	tearDown: (callback) ->
-		@server.on 'close', callback
-		@server.close()
-	
-	'foo': (test) -> test.done()
+  tearDown: (callback) ->
+    @server.on 'close', callback
+    @server.close()
+  
+  'foo': (test) -> test.done()
