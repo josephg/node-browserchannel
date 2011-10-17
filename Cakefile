@@ -4,7 +4,7 @@ closure = require './closure-compile'
 
 assemble = (files, out) ->
   code = for f in files
-    f = "#{__dirname}/lib/#{f}.coffee"
+    f = "#{__dirname}/src/#{f}.coffee"
     coffee = fs.readFileSync f, 'utf8'
     js = coffeescript.compile coffee, {f, bare:true}
 
