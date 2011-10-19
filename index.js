@@ -1,2 +1,3 @@
 require('coffee-script');
-module.exports = require('./lib');
+exports.server = require('./lib/server');
+exports.channel = require('./dist/node-channel.js');

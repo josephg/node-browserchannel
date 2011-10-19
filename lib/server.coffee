@@ -82,6 +82,9 @@ standardHeaders =
   'Expires': 'Fri, 01 Jan 1990 00:00:00 GMT'
   'X-Content-Type-Options': 'nosniff'
 
+  # Gmail also sends this, though I'm not really sure what it does...
+#  'X-Xss-Protection': '1; mode=block'
+
 # The one exception to that is requests destined for iframes. They need to
 # have content-type: text/html set for IE to process the juicy JS inside.
 ieHeaders = Object.create standardHeaders
@@ -307,7 +310,7 @@ order = (start, playOld) ->
 #
 # I should probably look into hosting the client code as a javascript module using that client-side
 # npm thing.
-clientFile = "#{__dirname}/channel.js"
+clientFile = "#{__dirname}/../dist/browserchannel.js"
 clientStats = fs.statSync clientFile
 try
   clientCode = fs.readFileSync clientFile, 'utf8'
@@ -421,6 +424,9 @@ module.exports = browserChannel = (options, onConnect) ->
     #   messages. If there's a buffering proxy in the way of the connection, we can't respond a bit at
     #   a time, so we close the backchannel after each data chunk. The client decides this during
     #   testing and passes a CI= parameter to the server when the backchannel connection is established.
+    # - **bytesSent** specifies how many bytes of data have been sent through the backchannel. We periodically
+    #   close the backchannel and let the client reopen it, so things like the chrome web inspector stay
+    #   usable.
     backChannel = null
 
     # The server sends data to the client by sending *arrays*. It seems a bit silly that
@@ -449,6 +455,7 @@ module.exports = browserChannel = (options, onConnect) ->
         res: res
         methods: messagingMethods query, res
         chunk: query.CI == '0'
+        bytesSent: 0
 
       res.connection.once 'close', -> clearBackChannel(res)
 
@@ -680,9 +687,11 @@ module.exports = browserChannel = (options, onConnect) ->
             # I've abused outgoingArrays to also contain some callbacks. We only send [id, data] to
             # the client.
             data = ([id, data] for {id, data} in arrays)
+            bytes = JSON.stringify(data) + "\n"
 
             # **Away!**
-            backChannel.methods.write JSON.stringify(data) + "\n"
+            backChannel.methods.write bytes
+            backChannel.bytesSent += bytes.length
 
             lastSentArrayId = lastArrayId
 
@@ -693,7 +702,7 @@ module.exports = browserChannel = (options, onConnect) ->
                 a.sendcallback?()
                 delete a.sendcallback
 
-            if !backChannel.chunk
+            if !backChannel.chunk or backChannel.bytesSent > 10 * 1024
               clearBackChannel()
 
           # The first backchannel is the client's initial connection. Once we've sent the first
@@ -763,7 +772,9 @@ module.exports = browserChannel = (options, onConnect) ->
   (req, res, next) ->
     {query, pathname} = parse req.url, true
     #console.warn req.method, req.url
-    return next() if pathname.substring(0, base.length) != base
+    
+    # If base is /foo, we don't match /foobar. (Currently no unit tests for this)
+    return next() if pathname.substring(0, base.length + 1) != "#{base}/"
 
     {writeHead, write, writeRaw, end, writeError} = messagingMethods query, res
 
@@ -775,7 +786,7 @@ module.exports = browserChannel = (options, onConnect) ->
     # If I have time, I would like to write my own version of the client to add a few features
     # (websockets, message acknowledgement callbacks) and do some manual optimisations for speed.
     # However, the current version works ok.
-    if pathname is "#{base}/channel.js"
+    if pathname is "#{base}/browserchannel.js"
       etag = "\"#{clientStats.size}-#{clientStats.mtime.getTime()}\""
       res.writeHead 200, 'OK',
         'Content-Type': 'application/javascript',
@@ -887,19 +898,24 @@ module.exports = browserChannel = (options, onConnect) ->
             console.warn 'Error parsing forward channel', e.stack
             return sendError res, 400, 'Bad data'
 
-          res.writeHead 200, 'OK', standardHeaders
-          # The initial forward channel request is also used as a backchannel for the server's
-          # initial data (session id, etc). This connection is a little bit special - it is always
-          # encoded using length-prefixed json encoding and it is closed as soon as the first chunk is
-          # sent.
           if session.state is 'init'
+            # The initial forward channel request is also used as a backchannel for the server's
+            # initial data (session id, etc). This connection is a little bit special - it is always
+            # encoded using length-prefixed json encoding and it is closed as soon as the first chunk is
+            # sent.
+            res.writeHead 200, 'OK', standardHeaders
             session._setBackChannel res, CI:1, TYPE:'xmlhttp', RID:'rpc'
             session.flush()
+          else if session.state is 'closed'
+            # If the onConnect handler called close() immediately, session.state can be already closed at this point.
+            # I'll assume there was an authentication problem and treat this as a forbidden connection attempt.
+            sendError res, 403, 'Forbidden'
           else
             # On normal forward channels, we reply to the request by telling the session
             # if our backchannel is still live and telling it how many unconfirmed
             # arrays we have.
             response = JSON.stringify session._backChannelStatus()
+            res.writeHead 200, 'OK', standardHeaders
             res.end "#{response.length}\n#{response}"
 
       else if req.method is 'GET'

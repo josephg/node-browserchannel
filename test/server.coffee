@@ -191,7 +191,7 @@ module.exports = testCase
       # handler *and* custom logic in @onSession. So, callback can be an object specifying
       # callbacks for each if you want that. Its a shame though, it makes this function
       # kinda ugly :/
-      @connect = (callback) ->
+      @connect = (callback) =>
         # This connect helper method is only useful if you don't care about the initial
         # post response.
         @post '/channel/bind?VER=8&RID=1000&t=1', 'count=0'
@@ -223,11 +223,10 @@ module.exports = testCase
   # Its self contained, with no dependancies on anything. It would be nice to test it as well,
   # but we'll do that elsewhere.
   'The javascript is hosted at /channel.js': (test) ->
-    @get '/channel/channel.js', (response) ->
+    @get '/channel/browserchannel.js', (response) ->
       test.strictEqual response.statusCode, 200
       test.strictEqual response.headers['content-type'], 'application/javascript'
       test.ok response.headers['etag']
-      console.log response.headers['etag']
       buffer response, (data) ->
         # Its about 47k. If the size changes too drastically, I want to know about it.
         test.ok data.length > 45000, "Client is unusually small (#{data.length} bytes)"
@@ -1174,7 +1173,7 @@ module.exports = testCase
         @session.stop ->
           # Just a noop test to increase the 'things tested' count
           test.ok 1
-  
+
   # close() aborts the session immediately. After calling close, subsequent requests to the session
   # should fail with unknown SID errors.
   'session.close() closes the session':
@@ -1191,6 +1190,16 @@ module.exports = testCase
       @get "/channel/bind?VER=8&RID=rpc&SID=#{@session.id}&AID=0&TYPE=xmlhttp&CI=0", (res) =>
         test.strictEqual res.statusCode, 400
         test.done()
+
+  # If you close immediately, the initial POST gets a 403 response (its probably an auth problem?)
+  'An immediate session.close() results in the initial connection getting a 403 response': (test) ->
+      @onSession = (@session) =>
+        @session.close()
+
+      @post '/channel/bind?VER=8&RID=1000&t=1', 'count=0', (res) ->
+        buffer res, (data) ->
+          test.strictEqual res.statusCode, 403
+          test.done()
 
   # The session runs as a little state machine. It starts in the 'init' state, then moves to
   # 'ok' when the session is established. When the connection is closed, it moves to 'closed' state

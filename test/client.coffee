@@ -3,23 +3,12 @@
 # The browserchannel client is currently implemented using a shim over the closure
 # browserchannel library.
 
-{testCase} = require 'nodeunit'
-{server, client} = require('..')
-
-assert = require 'assert'
-{createServer} = require './helpers'
-
-#timer = require 'timerstub'
-#browserChannel._setTimerMethods timer
-
-module.exports = testCase
+module.exports = nodeunit.testCase
   setUp: (callback) ->
-    @onSession = (session) ->
-    createServer ((session) => @onSession session), (@server, @port) =>
-      callback()
+    callback()
 
   tearDown: (callback) ->
-    @server.on 'close', callback
-    @server.close()
+    callback()
   
   'foo': (test) -> test.done()
+
