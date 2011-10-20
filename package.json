@@ -19,7 +19,11 @@
     "coffee-script": "~1",
     "hat": "*",
     "connect": "~1.7",
-    "timerstub": "*"
+    "timerstub": "*",
+    "request": "~2"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "browserify": "~1",
+    "nodeunit": "*"
+  }
 }
