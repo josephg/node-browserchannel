@@ -756,6 +756,7 @@ module.exports = browserChannel = (options, onConnect) ->
         confirmcallback?(new Error message || 'closed')
       
       delete sessions[@id]
+      console.log "closed #{@id}"
 
     sessions[session.id] = session
 

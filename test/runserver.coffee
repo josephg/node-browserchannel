@@ -7,9 +7,10 @@ browserify = require 'browserify'
 
 server = connect(
   connect.static "#{__dirname}/web"
+  connect.logger()
   # Compile and host the tests. watch:true means the tests can be edited
   # without restarting the server.
-  browserify entry:"#{__dirname}/browsersuite.coffee", watch:true
+  browserify entry:"#{__dirname}/browsersuite.coffee", watch:true, ignore:['nodeunit', '..']
 
   # When a client connects, send it a simple message saying its app version
   browserChannel base:'/notify', (session) ->

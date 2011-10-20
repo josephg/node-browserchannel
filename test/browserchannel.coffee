@@ -1,5 +1,16 @@
 # # Tests for the bare BrowserChannel client.
 #
+# Run them by first launching
+#
+#     % coffee test/runserver.coffee
+#
+# ... Then browsing to localhost:4321 in your browser or running:
+#
+#     % nodeunit test/browserchannel.coffee
+#
+# from the command line. You should do both kinds of testing before pushing.
+#
+#
 # These tests are pretty simple and primitive. The reality is, google's browserchannel
 # client library is pretty bloody well tested. (I'm not interested in rewriting that test suite)
 #
@@ -15,13 +26,37 @@
 #
 # Interestingly, most of the benefits of this test suite come from a single test (really, any
 # test). If any test passes, they'll all probably pass.
+#
+#
+# ## Known Issues
+#
+# There's three weird issues with this test suite:
+#
+# - Sometimes (maybe, 1 in 10) times the test is run from nodejs, it dies in a weird inconsistant
+#   state.
+# - Sometimes (about 1/4 times) the tests are run, the process doesn't exit for about 5 seconds after
+#   the tests have finished. Presumably, there's a setTimeout() in the client somewhere which has
+#   a race condition causing it to misbehave.
+# - After a test run, 4 sessions are allowed to time out by the server. (Its odd because I'm calling
+#   disconnect() in tearDown).
+
+nodeunit = window?.nodeunit or require 'nodeunit'
+
+if process.title is 'node'
+  client = require('..').client
+  # I'd like to just say goog = bc.goog or something, but then coffeescript makes goog a variable,
+  # which overrides goog defined in the window object in a browser.
+  # Doing it this way makes goog a javascript global variable in nodejs, but that hardly matters.
+  goog ?= client.goog
+  client.setDefaultLocation 'http://localhost:4321'
 
 makeTests = (configure) -> nodeunit.testCase
   setUp: (callback) ->
-    # This is needed so frequently we may as well make it global.
+    # We need a session and a handler in every test.
     @session = new goog.net.BrowserChannel 123
     @handler = new goog.net.BrowserChannel.Handler()
     configure? @session, @handler
+    #@session.setFailFast true
     @session.setHandler @handler
     callback()
 
@@ -37,7 +72,7 @@ makeTests = (configure) -> nodeunit.testCase
       # call any callbacks. Skip on to the next test.
       @session.disconnect() if @session.getState() is goog.net.BrowserChannel.State.OPENING
       callback()
-  
+
   # Can we connect to the server?
   'connect': (test) ->
     @handler.channelOpened = (session_) =>
@@ -90,6 +125,9 @@ makeTests = (configure) -> nodeunit.testCase
     @handler.channelOpened = (session_) ->
       throw new Error 'Channel should not have opened'
 
+    # For some reason, sometimes nodeunit frieks the crap out here and (after the test has completed!)
+    # throws a bunch of assertions, claiming that the session's last status code is -1, etc. I don't know
+    # what *could* cause that sort of behaviour.
     @handler.channelError = (session, errCode) =>
       test.strictEqual errCode, goog.net.BrowserChannel.Error.REQUEST_FAILED
       test.strictEqual 403, @session.getLastStatusCode()
@@ -97,7 +135,7 @@ makeTests = (configure) -> nodeunit.testCase
 
     # Interestingly, we don't have to set failFast for this to work.
     @session.connect "/dc1/test", "/dc1/bind"
-    
+
   'disconnecting momentarily allows the client to connect, then channelClosed() is called': (test) ->
     @handler.channelError = (session, errCode) =>
       # The error code varies here, depending on some timing parameters & browser. I've seen NO_DATA, REQUEST_FAILED and
@@ -136,7 +174,7 @@ makeTests = (configure) -> nodeunit.testCase
   # pushes the client to use multiple forward channel connections. It doesn't use multiple backchannel connections -
   # I should probably put some logic there whereby I close the backchannel after awhile.
   'Send & receive lots of data': (test) ->
-    num = 5000
+    num = 50
 
     received = 0
     @handler.channelHandleArray = (session, message) ->

@@ -1,9 +1,11 @@
 # These aren't required if we're pulling in the browserchannel code manually.
 
-#goog.require 'goog.net.BrowserChannel'
-#goog.require 'goog.net.BrowserChannel.Handler'
-#goog.require 'goog.net.BrowserChannel.Error'
-#goog.require 'goog.net.BrowserChannel.State'
+goog.provide 'bc'
+
+goog.require 'goog.net.BrowserChannel'
+goog.require 'goog.net.BrowserChannel.Handler'
+goog.require 'goog.net.BrowserChannel.Error'
+goog.require 'goog.net.BrowserChannel.State'
 
 p = goog.net.BrowserChannel.prototype
 
@@ -53,9 +55,10 @@ goog.require 'goog.json'
 p['send'] = (message) ->
   @sendMap 'JSON': goog.json.serialize message
 
-# I previously set up aliases for goog.net.BrowserChannel.[Error, State] but the
-# closure compiler will compile better if you don't do that.
 goog.net.BrowserChannel['Handler'] = goog.net.BrowserChannel.Handler
+
+# I previously set up aliases for goog.net.BrowserChannel.[Error, State] but the
+# closure seems to produce better code if you don't do that.
 goog.net.BrowserChannel['Error'] =
   'OK':                 goog.net.BrowserChannel.Error.OK
   'REQUEST_FAILED':     goog.net.BrowserChannel.Error.REQUEST_FAILED
@@ -67,10 +70,11 @@ goog.net.BrowserChannel['Error'] =
   'BLOCKED':            goog.net.BrowserChannel.Error.BLOCKED
   'BAD_DATA':           goog.net.BrowserChannel.Error.BAD_DATA
   'BAD_RESPONSE':       goog.net.BrowserChannel.Error.BAD_RESPONSE
+
 goog.net.BrowserChannel['State'] =
   'CLOSED':  goog.net.BrowserChannel.State.CLOSED
   'INIT':    goog.net.BrowserChannel.State.INIT
   'OPENING': goog.net.BrowserChannel.State.OPENING
   'OPENED':  goog.net.BrowserChannel.State.OPENED
 
-goog.exportSymbol 'goog.net.BrowserChannel', goog.net.BrowserChannel
+goog.exportSymbol 'goog.net.BrowserChannel', goog.net.BrowserChannel, exports ? window
