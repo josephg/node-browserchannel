@@ -222,8 +222,8 @@ module.exports = testCase
   #
   # Its self contained, with no dependancies on anything. It would be nice to test it as well,
   # but we'll do that elsewhere.
-  'The javascript is hosted at /channel.js': (test) ->
-    @get '/channel/browserchannel.js', (response) ->
+  'The javascript is hosted at channel/bcsocket.js': (test) ->
+    @get '/channel/bcsocket.js', (response) ->
       test.strictEqual response.statusCode, 200
       test.strictEqual response.headers['content-type'], 'application/javascript'
       test.ok response.headers['etag']
@@ -1310,8 +1310,18 @@ module.exports = testCase
     @session.on 'message', (msg) ->
       test.deepEqual msg, data.shift()
 
+  # Hm- this test works, but the client code never recieves the null message. Eh.
+  'You can send null': (test) -> @connect ->
+    @session.send null
+
+    req = @get "/channel/bind?VER=8&RID=rpc&SID=#{@session.id}&AID=0&TYPE=xmlhttp&CI=0", (res) =>
+      readLengthPrefixedJSON res, (data) ->
+        test.deepEqual data, [[1, null]]
+
+        req.abort()
+        test.done()
+
   #'print': (test) -> @connect -> console.warn @session; test.done()
 
   # I should also test that you can mix a bunch of JSON requests and map requests, out of order, and the
   # server sorts it all out.
-

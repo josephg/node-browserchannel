@@ -1,3 +1,9 @@
 require('coffee-script');
 exports.server = require('./lib/server');
-exports.client = require('./dist/node-browserchannel.js');
+
+// This exposes the bare browserchannel implementation.
+//exports.goog = require('./dist/node-browserchannel.js');
+
+var BCSocket = require('./dist/node-BCSocket.js');
+exports.BCSocket = BCSocket.BCSocket;
+exports.setDefaultLocation = BCSocket.setDefaultLocation;

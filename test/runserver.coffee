@@ -14,7 +14,7 @@ server = connect(
 
   # When a client connects, send it a simple message saying its app version
   browserChannel base:'/notify', (session) ->
-    session.send session.appVersion
+    session.send {appVersion: session.appVersion}
 
   # Echo back any JSON messages a client sends.
   browserChannel base:'/echo', (session) ->
@@ -34,6 +34,9 @@ server = connect(
   browserChannel base:'/dc2', (session) ->
     process.nextTick ->
       session.close()
+
+  browserChannel base:'/dc3', (session) ->
+    setTimeout (-> session.close()), 100
 
   # Send a stop() message immediately
   browserChannel base:'/stop1', (session) ->

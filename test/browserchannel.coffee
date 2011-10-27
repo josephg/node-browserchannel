@@ -1,5 +1,8 @@
 # # Tests for the bare BrowserChannel client.
 #
+# > The bare browserchannel client is no longer exposed by default. If you actually want to use this,
+# > file a ticket or something.
+#
 # Run them by first launching
 #
 #     % coffee test/runserver.coffee
@@ -43,12 +46,12 @@
 nodeunit = window?.nodeunit or require 'nodeunit'
 
 if process.title is 'node'
-  client = require('..').client
+  bc = require '..'
   # I'd like to just say goog = bc.goog or something, but then coffeescript makes goog a variable,
   # which overrides goog defined in the window object in a browser.
   # Doing it this way makes goog a javascript global variable in nodejs, but that hardly matters.
-  goog ?= client.goog
-  client.setDefaultLocation 'http://localhost:4321'
+  goog ?= bc.goog
+  goog.setDefaultLocation 'http://localhost:4321'
 
 makeTests = (configure) -> nodeunit.testCase
   setUp: (callback) ->
@@ -174,7 +177,7 @@ makeTests = (configure) -> nodeunit.testCase
   # pushes the client to use multiple forward channel connections. It doesn't use multiple backchannel connections -
   # I should probably put some logic there whereby I close the backchannel after awhile.
   'Send & receive lots of data': (test) ->
-    num = 50
+    num = 5000
 
     received = 0
     @handler.channelHandleArray = (session, message) ->

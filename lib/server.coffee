@@ -310,7 +310,7 @@ order = (start, playOld) ->
 #
 # I should probably look into hosting the client code as a javascript module using that client-side
 # npm thing.
-clientFile = "#{__dirname}/../dist/browserchannel.js"
+clientFile = "#{__dirname}/../dist/bcsocket.js"
 clientStats = fs.statSync clientFile
 try
   clientCode = fs.readFileSync clientFile, 'utf8'
@@ -781,13 +781,13 @@ module.exports = browserChannel = (options, onConnect) ->
 
     # # Serving the client
     #
-    # The browserchannel server hosts a usable web client library at /channel/channel.js.
-    # This library includes (and wraps) the google closure library client implementation.
+    # The browserchannel server hosts a usable web client library at /CHANNEL/bcsocket.js.
+    # This library wraps the google closure library client implementation.
     #
     # If I have time, I would like to write my own version of the client to add a few features
     # (websockets, message acknowledgement callbacks) and do some manual optimisations for speed.
     # However, the current version works ok.
-    if pathname is "#{base}/browserchannel.js"
+    if pathname is "#{base}/bcsocket.js"
       etag = "\"#{clientStats.size}-#{clientStats.mtime.getTime()}\""
       res.writeHead 200, 'OK',
         'Content-Type': 'application/javascript',

@@ -13,7 +13,7 @@
 
 goog.provide 'bc.node'
 
-goog.require 'bc'
+#goog.require 'bc'
 
 request = require 'request'
 

@@ -29,7 +29,7 @@ compile = (files) ->
     js = coffeescript.compile coffee, {filename, bare:true}
     fs.writeFileSync "#{__dirname}/tmp/#{f}.js", js
 
-assemble = (namespace, out) ->
+assemble = (namespaces, out) ->
 #  code = code.join ''
 #  code = "(function(){#{code}})()"
 
@@ -37,11 +37,15 @@ assemble = (namespace, out) ->
 
   console.warn "Compiling #{out}..."
 
-  # You can add --compiler_flags="--formatting=PRETTY_PRINT" to enable readable output
+  namespaces = [namespaces] if typeof namespaces is 'string'
+  namespaceArgs = ("--namespace=#{n}" for n in namespaces).join ' '
+
+  # You can add the line below to enable readable output
+  #--compiler_flags=\"--formatting=PRETTY_PRINT\"
   exec "#{CLOSURE_DIR}/closure/bin/build/closurebuilder.py
     --root=#{CLOSURE_DIR}
     --root=tmp/
-    --namespace=#{namespace}
+    #{namespaceArgs}
     --output_mode=compiled
     --compiler_jar=#{CLOSURE_COMPILER}
     --compiler_flags=\"--compilation_level=ADVANCED_OPTIMIZATIONS\"
@@ -52,11 +56,13 @@ assemble = (namespace, out) ->
     fs.writeFileSync "#{__dirname}/dist/#{out}", "(function(){#{stdout}})();"
 
 task 'client', 'Build the closure client into a compiled JS file', ->
-  compile ['nodejs-override', 'browserchannel']
+  compile ['nodejs-override', 'browserchannel', 'bcsocket']
 
-  console.warn "About to start some closure compiling. It takes about a minute, so be patient."
-  assemble 'bc', 'browserchannel.js'
-  assemble 'bc.node', 'node-browserchannel.js'
-#  assemble ['microevent', 'channel'], "lib/channel.js"
-#  assemble ['microevent', 'channel', 'nodejs-override'], "lib/node-channel.js"
+  console.warn "Closure compiling. It takes about a minute, so be patient."
+
+#  assemble 'bc', 'browserchannel.js'
+#  assemble ['bc', 'bc.node'], 'node-browserchannel.js'
+
+  assemble 'bc.BCSocket', 'BCSocket.js'
+  assemble ['bc.BCSocket', 'bc.node'], 'node-BCSocket.js'
 
