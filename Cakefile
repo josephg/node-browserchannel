@@ -63,6 +63,6 @@ task 'client', 'Build the closure client into a compiled JS file', ->
 #  assemble 'bc', 'browserchannel.js'
 #  assemble ['bc', 'bc.node'], 'node-browserchannel.js'
 
-  assemble 'bc.BCSocket', 'BCSocket.js'
-  assemble ['bc.BCSocket', 'bc.node'], 'node-BCSocket.js'
+  assemble 'bc.BCSocket', 'bcsocket.js'
+  assemble ['bc.BCSocket', 'bc.node'], 'node-bcsocket.js'
 
