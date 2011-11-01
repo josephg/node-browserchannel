@@ -1,7 +1,7 @@
 A [BrowserChannel](http://closure-library.googlecode.com/svn/trunk/closure/goog/net/browserchannel.js) server.
 
-**tldr;** Its like socket.io, but it scales better and it has fewer bugs. However, it
-doesn't support websockets and doesn't work cross-domain.
+**tldr;** Its like socket.io, but it scales better and it has fewer bugs. It
+just does long polling. It doesn't support websockets and doesn't work cross-domain.
 
 BrowserChannel is google's version of [socket.io](http://socket.io) from when they first put
 chat in gmail. Unlike socket.io, browserchannel provides much better guarantees about message
@@ -62,7 +62,7 @@ socket.onopen = ->
 <html><head>
 <script src='/channel/bcsocket.js'></script>
 <script>
-socket = new BCSocket('http://localhost:4321/channel');
+socket = new BCSocket('/channel');
 socket.onopen = function() {
   socket.send({hi:'there'});
   socket.close();
