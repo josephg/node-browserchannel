@@ -62,7 +62,7 @@ socket.onopen = ->
 <html><head>
 <script src='/channel/bcsocket.js'></script>
 <script>
-socket = new BCSocket('http://localhost:4321/channel');
+socket = new BCSocket('/channel');
 socket.onopen = function() {
   socket.send({hi:'there'});
   socket.close();
