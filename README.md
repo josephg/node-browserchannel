@@ -30,16 +30,22 @@ browserChannel = require('browserchannel').server
 connect = require 'connect'
 
 server = connect(
-	connect.static "#{__dirname}/public"
-	browserChannel (session) ->
-		console.log "New session: #{session.id}"
+  connect.static "#{__dirname}/public"
+  browserChannel (session) ->
+    console.log "New session: #{session.id} from #{session.address} with cookies #{session.headers.cookie}"
 
-		session.on 'message', (data) ->
-			console.log "#{session.id} sent #{JSON.stringify data}"
-			session.send data
+    session.on 'message', (data) ->
+      console.log "#{session.id} sent #{JSON.stringify data}"
+      session.send data
 
-		session.on 'close', (reason) ->
-			console.log "Session #{session.id} disconnected (#{reason})"
+    session.on 'close', (reason) ->
+      console.log "Session #{session.id} disconnected (#{reason})"
+      
+    # This tells the session to stop trying to connect
+    session.stop()
+    
+    # This just kills the session.
+    session.abort()
 ).listen(4321)
 
 console.log 'Echo server listening on localhost:4321'
@@ -53,7 +59,11 @@ The client emulates the [websocket API](http://dev.w3.org/html5/websockets/). He
 socket = new BCSocket 'http://localhost:4321/channel'
 socket.onopen = ->
   socket.send {hi:'there'}
-  socket.close()
+socket.onmessage = (message) ->
+  console.log 'got message', message
+
+# later...
+socket.close()
 ```
 
 ... Or from a website:
@@ -66,6 +76,9 @@ socket = new BCSocket('/channel');
 socket.onopen = function() {
   socket.send({hi:'there'});
   socket.close();
+};
+socket.onmessage = function(message) {
+  // ...
 };
 </script>
 ```
