@@ -374,7 +374,7 @@ module.exports = browserChannel = (options, onConnect) ->
   #
   # Sometimes a client will specify an old session ID and old array ID. In this case, the client
   # is reconnecting and we should evict the named session (if it exists).
-  createSession = (address, query) ->
+  createSession = (address, query, headers) ->
     {RID:initialRid, CVER:appVersion, OSID:oldSessionId, OAID:oldArrayId} = query
 
     if oldSessionId? and (oldSession = sessions[oldSessionId])
@@ -392,7 +392,7 @@ module.exports = browserChannel = (options, onConnect) ->
     # The client stores its IP address and headers from when it first opened the session. The
     # handler can use this information for authentication or something.
     session.address = address
-    session.headers = query.headers
+    session.headers = headers
 
     # The session is a little state machine. It has the following states:
     #
@@ -890,7 +890,7 @@ module.exports = browserChannel = (options, onConnect) ->
           
           # The session is new! Make them a new session object and let the
           # application know.
-          session = createSession req.connection.remoteAddress, query
+          session = createSession req.connection.remoteAddress, query, req.headers
           onConnect? session
 
         bufferPostData req, (data) ->

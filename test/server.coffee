@@ -440,6 +440,9 @@ module.exports = testCase
       test.strictEqual typeof session.id, 'string'
       test.strictEqual session.state, 'init'
       test.strictEqual session.appVersion, '99'
+      test.deepEqual session.address, '127.0.0.1'
+      test.strictEqual typeof session.headers, 'object'
+
       id = session.id
       session.on 'map', -> throw new Error 'Should not have received data'
 
@@ -450,7 +453,7 @@ module.exports = testCase
       buffer res, (data) ->
         # Even for old IE clients, the server responds in length-prefixed JSON style.
         test.strictEqual data, "#{expected.length}\n#{expected}"
-        test.expect 5
+        test.expect 7
         test.done()
   
   # Once a client's session id is sent, the session moves to the `ok` state. This happens after onSession is
