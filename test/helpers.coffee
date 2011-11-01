@@ -14,8 +14,7 @@ exports.createServer = (opts, method, callback) ->
   # Its possible to use the browserChannel middleware without specifying an options
   # object. This little createServer function will mirror that behaviour.
   if typeof opts == 'function'
-    callback = method
-    method = opts
+    [method, callback] = [opts, method]
     # I want to match up with how its actually going to be used.
     bc = browserChannel method
   else

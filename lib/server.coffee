@@ -389,6 +389,11 @@ module.exports = browserChannel = (options, onConnect) ->
     # The session's unique ID for this connection
     session.id = hat()
 
+    # The client stores its IP address and headers from when it first opened the session. The
+    # handler can use this information for authentication or something.
+    session.address = address
+    session.headers = query.headers
+
     # The session is a little state machine. It has the following states:
     #
     # - **init**: The session has been created and its sessionId hasn't been sent yet.
@@ -709,9 +714,6 @@ module.exports = browserChannel = (options, onConnect) ->
           # data chunk to the client, we've officially opened the connection.
           changeState 'ok' if session.state == 'init'
   
-    # The client's IP address when it first opened the session
-    session.address = address
-
     # The client's reported application version, or null. This is sent when the
     # connection is first requested, so you can use it to make your application die / stay
     # compatible with people who don't close their browsers.

@@ -173,10 +173,10 @@ module.exports = testCase
 
       # I'll add a couple helper methods for tests to easily message the server.
       @get = (path, callback) =>
-        http.get {host:'localhost', path, @port}, callback
+        http.get {host:'127.0.0.1', path, @port}, callback
 
       @post = (path, data, callback) =>
-        req = http.request {method:'POST', host:'localhost', path, @port}, callback
+        req = http.request {method:'POST', host:'127.0.0.1', path, @port}, callback
         req.end data
 
       # One of the most common tasks in tests is to create a new session for
@@ -216,7 +216,7 @@ module.exports = testCase
     # like this.
     @server.on 'close', callback
     @server.close()
-
+  
   # The server hosts the client-side javascript at /channel.js. It should have headers set to tell
   # browsers its javascript.
   #
@@ -252,7 +252,7 @@ module.exports = testCase
     # I don't know if thats actually useful behaviour, but *shrug*
     # I should probably write a test to make sure all host prefixes will be chosen from time to time.
     createServer hostPrefixes:['chan'], (->), (server, port) ->
-      http.get {path:'/channel/test?VER=8&MODE=init', host: 'localhost', port: port}, (response) ->
+      http.get {path:'/channel/test?VER=8&MODE=init', host: '127.0.0.1', port: port}, (response) ->
         test.strictEqual response.statusCode, 200
         buffer response, (data) ->
           test.strictEqual data, '["chan",null]'
@@ -265,7 +265,7 @@ module.exports = testCase
   # only.
   'The test channel responds at a bound custom endpoint': (test) ->
     createServer base:'/foozit', (->), (server, port) ->
-      http.get {path:'/foozit/test?VER=8&MODE=init', host: 'localhost', port: port}, (response) ->
+      http.get {path:'/foozit/test?VER=8&MODE=init', host: '127.0.0.1', port: port}, (response) ->
         test.strictEqual response.statusCode, 200
         buffer response, (data) ->
           test.strictEqual data, '[null,null]'
@@ -276,7 +276,7 @@ module.exports = testCase
   # url. That should work too.
   'binding the server to a custom url without a leading slash works': (test) ->
     createServer base:'foozit', (->), (server, port) ->
-      http.get {path:'/foozit/test?VER=8&MODE=init', host: 'localhost', port: port}, (response) ->
+      http.get {path:'/foozit/test?VER=8&MODE=init', host: '127.0.0.1', port: port}, (response) ->
         test.strictEqual response.statusCode, 200
         buffer response, (data) ->
           test.strictEqual data, '[null,null]'
@@ -289,7 +289,7 @@ module.exports = testCase
     # Some day, the copy+paste police are gonna get me. I don't feel *so* bad doing it for tests though, because
     # it helps readability.
     createServer base:'foozit/', (->), (server, port) ->
-      http.get {path:'/foozit/test?VER=8&MODE=init', host: 'localhost', port: port}, (response) ->
+      http.get {path:'/foozit/test?VER=8&MODE=init', host: '127.0.0.1', port: port}, (response) ->
         test.strictEqual response.statusCode, 200
         buffer response, (data) ->
           test.strictEqual data, '[null,null]'
@@ -576,7 +576,6 @@ module.exports = testCase
             test.deepEqual data, [1, 3, 25]
             req.abort()
             test.done()
-
   
   # When the user calls send(), data is queued by the server and sent into the next backchannel connection.
   #
@@ -1193,13 +1192,13 @@ module.exports = testCase
 
   # If you close immediately, the initial POST gets a 403 response (its probably an auth problem?)
   'An immediate session.close() results in the initial connection getting a 403 response': (test) ->
-      @onSession = (@session) =>
-        @session.close()
+    @onSession = (@session) =>
+      @session.close()
 
-      @post '/channel/bind?VER=8&RID=1000&t=1', 'count=0', (res) ->
-        buffer res, (data) ->
-          test.strictEqual res.statusCode, 403
-          test.done()
+    @post '/channel/bind?VER=8&RID=1000&t=1', 'count=0', (res) ->
+      buffer res, (data) ->
+        test.strictEqual res.statusCode, 403
+        test.done()
 
   # The session runs as a little state machine. It starts in the 'init' state, then moves to
   # 'ok' when the session is established. When the connection is closed, it moves to 'closed' state
@@ -1289,7 +1288,7 @@ module.exports = testCase
     options =
       method: 'POST'
       path: "/channel/bind?VER=8&RID=1001&SID=#{@session.id}&AID=0"
-      host: 'localhost'
+      host: '127.0.0.1'
       port: @port
       headers:
         'Content-Type': 'application/json'
