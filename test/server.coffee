@@ -173,10 +173,10 @@ module.exports = testCase
 
       # I'll add a couple helper methods for tests to easily message the server.
       @get = (path, callback) =>
-        http.get {host:'127.0.0.1', path, @port}, callback
+        http.get {host:'localhost', path, @port}, callback
 
       @post = (path, data, callback) =>
-        req = http.request {method:'POST', host:'127.0.0.1', path, @port}, callback
+        req = http.request {method:'POST', host:'localhost', path, @port}, callback
         req.end data
 
       # One of the most common tasks in tests is to create a new session for
@@ -252,7 +252,7 @@ module.exports = testCase
     # I don't know if thats actually useful behaviour, but *shrug*
     # I should probably write a test to make sure all host prefixes will be chosen from time to time.
     createServer hostPrefixes:['chan'], (->), (server, port) ->
-      http.get {path:'/channel/test?VER=8&MODE=init', host: '127.0.0.1', port: port}, (response) ->
+      http.get {path:'/channel/test?VER=8&MODE=init', host: 'localhost', port: port}, (response) ->
         test.strictEqual response.statusCode, 200
         buffer response, (data) ->
           test.strictEqual data, '["chan",null]'
@@ -265,7 +265,7 @@ module.exports = testCase
   # only.
   'The test channel responds at a bound custom endpoint': (test) ->
     createServer base:'/foozit', (->), (server, port) ->
-      http.get {path:'/foozit/test?VER=8&MODE=init', host: '127.0.0.1', port: port}, (response) ->
+      http.get {path:'/foozit/test?VER=8&MODE=init', host: 'localhost', port: port}, (response) ->
         test.strictEqual response.statusCode, 200
         buffer response, (data) ->
           test.strictEqual data, '[null,null]'
@@ -276,7 +276,7 @@ module.exports = testCase
   # url. That should work too.
   'binding the server to a custom url without a leading slash works': (test) ->
     createServer base:'foozit', (->), (server, port) ->
-      http.get {path:'/foozit/test?VER=8&MODE=init', host: '127.0.0.1', port: port}, (response) ->
+      http.get {path:'/foozit/test?VER=8&MODE=init', host: 'localhost', port: port}, (response) ->
         test.strictEqual response.statusCode, 200
         buffer response, (data) ->
           test.strictEqual data, '[null,null]'
@@ -289,7 +289,7 @@ module.exports = testCase
     # Some day, the copy+paste police are gonna get me. I don't feel *so* bad doing it for tests though, because
     # it helps readability.
     createServer base:'foozit/', (->), (server, port) ->
-      http.get {path:'/foozit/test?VER=8&MODE=init', host: '127.0.0.1', port: port}, (response) ->
+      http.get {path:'/foozit/test?VER=8&MODE=init', host: 'localhost', port: port}, (response) ->
         test.strictEqual response.statusCode, 200
         buffer response, (data) ->
           test.strictEqual data, '[null,null]'
@@ -556,6 +556,9 @@ module.exports = testCase
           test.deepEqual data, [1, 0, 0]
           # The backchannel hasn't gotten any data yet. It'll spend 15 seconds or so timing out
           # if we don't abort it manually.
+
+          # As of nodejs 0.6, if you abort() a connection, it can emit an error.
+          req.on 'error', ->
           req.abort()
           test.done()
 
@@ -687,6 +690,7 @@ module.exports = testCase
         res.on 'end', -> throw new Error 'connection should have stayed open'
 
         soon ->
+          res.removeAllListeners 'end'
           req.abort()
           test.done()
 
@@ -772,6 +776,7 @@ module.exports = testCase
           req2 = @get "/channel/bind?VER=8&RID=rpc&SID=#{@session.id}&AID=1&TYPE=xmlhttp&CI=0", (res2) =>
 
           res.on 'end', ->
+            req2.on 'error', ->
             req2.abort()
             test.done()
 
@@ -999,6 +1004,7 @@ module.exports = testCase
 
       # I'll let the backchannel establish itself for a moment, and then nuke it.
       soon =>
+        req.on 'error', ->
         req.abort()
         # It should take about 30 seconds from now to timeout the connection.
         start = timer.Date.now()
@@ -1291,7 +1297,7 @@ module.exports = testCase
     options =
       method: 'POST'
       path: "/channel/bind?VER=8&RID=1001&SID=#{@session.id}&AID=0"
-      host: '127.0.0.1'
+      host: 'localhost'
       port: @port
       headers:
         'Content-Type': 'application/json'

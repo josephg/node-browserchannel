@@ -26,7 +26,7 @@ querystring = require 'querystring'
 # `fs` is used to read & serve the client library
 fs = require 'fs'
 
-# Client sessions are `EventEmitters
+# Client sessions are `EventEmitters`
 {EventEmitter} = require 'events'
 # Client session Ids are generated using `node-hat`
 hat = require('hat').rack(40, 36)
