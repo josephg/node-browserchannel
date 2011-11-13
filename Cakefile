@@ -1,5 +1,5 @@
 fs = require 'fs'
-{exec} = require 'child_process'
+{exec, spawn} = require 'child_process'
 coffeescript = require 'coffee-script'
 
 # The compilation process now uses the closure compiler .jar. You'll need a copy of
@@ -38,22 +38,28 @@ assemble = (namespaces, out) ->
   console.warn "Compiling #{out}..."
 
   namespaces = [namespaces] if typeof namespaces is 'string'
-  namespaceArgs = ("--namespace=#{n}" for n in namespaces).join ' '
+  args = [
+    "--root=#{CLOSURE_DIR}"
+    "--root=tmp/"
+    "--output_mode=compiled"
+    "--compiler_jar=#{CLOSURE_COMPILER}"
+    "--compiler_flags=--compilation_level=ADVANCED_OPTIMIZATIONS"
+    #"--compiler_flags=--formatting=PRETTY_PRINT"
+    "--compiler_flags=--warning_level=DEFAULT"
+    "--compiler_flags=--externs=lib/handler-externs.js"
+  ]
+  args.push "--namespace=#{n}" for n in namespaces
 
   # You can add the line below to enable readable output
   #--compiler_flags=\"--formatting=PRETTY_PRINT\"
-  exec "#{CLOSURE_DIR}/closure/bin/build/closurebuilder.py
-    --root=#{CLOSURE_DIR}
-    --root=tmp/
-    #{namespaceArgs}
-    --output_mode=compiled
-    --compiler_jar=#{CLOSURE_COMPILER}
-    --compiler_flags=\"--compilation_level=ADVANCED_OPTIMIZATIONS\"
-    --compiler_flags=\"--warning_level=DEFAULT\"
-    --compiler_flags=\"--externs=lib/handler-externs.js\"", (err, stdout, stderr) ->
-    throw err if err
-    console.warn stderr
-    fs.writeFileSync "#{__dirname}/dist/#{out}", "(function(){#{stdout}})();"
+  builder = spawn "#{CLOSURE_DIR}/closure/bin/build/closurebuilder.py", args
+  result = []
+  builder.stdout.on 'data', (data) -> result.push data
+  builder.stderr.on 'data', (data) -> console.error (data.toString 'utf8')
+
+  builder.on 'exit', (code) ->
+    throw new Error "Builder failed with with code #{code}" if code
+    fs.writeFileSync "#{__dirname}/dist/#{out}", "(function(){#{result.join ''}})();"
 
 task 'client', 'Build the closure client into a compiled JS file', ->
   compile ['nodejs-override', 'browserchannel', 'bcsocket']

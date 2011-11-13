@@ -169,7 +169,7 @@ module.exports = testCase
     # That will automatically set this.server and this.port to the callback arguments.
     # 
     # Actually calling the callback starts the test.
-    createServer ((session) => @onSession session), (@server, @port) =>
+    createServer ((session) => @onSession session), (@server, @port, @bc) =>
 
       # I'll add a couple helper methods for tests to easily message the server.
       @get = (path, callback) =>
@@ -1328,6 +1328,10 @@ module.exports = testCase
 
         req.abort()
         test.done()
+
+  'Sessions are cancelled when close() is called on the server': (test) -> @connect ->
+    @session.on 'close', test.done
+    @bc.close()
 
   #'print': (test) -> @connect -> console.warn @session; test.done()
 

@@ -350,6 +350,7 @@ module.exports = browserChannel = (options, onConnect) ->
   # Add a leading slash back on base
   base = "/#{base}" unless base.match /^\//
 
+  # map from sessionId -> session
   sessions = {}
 
   # Host prefixes provide a way to skirt around connection limits. They're only
@@ -772,7 +773,7 @@ module.exports = browserChannel = (options, onConnect) ->
   # - Handle the request, sending data back to the server via the response
   # - Call `next()`, which allows the next middleware in the stack a chance to
   #   handle the request.
-  (req, res, next) ->
+  middleware = (req, res, next) ->
     {query, pathname} = parse req.url, true
     #console.warn req.method, req.url
     
@@ -943,13 +944,16 @@ module.exports = browserChannel = (options, onConnect) ->
       else
         res.writeHead 405, 'Method Not Allowed', standardHeaders
         res.end "Method not allowed"
-        
 
     else
       # We'll 404 the user instead of letting another handler take care of it.
       # Users shouldn't be using the specified URL prefix for anything else.
       res.writeHead 404, 'Not Found', standardHeaders
       res.end "Not found"
+
+  middleware.close = -> session.close() for id, session of sessions
+
+  middleware
 
 # This will override the timer methods (`setInterval`, etc) with the testing stub versions,
 # which are way faster.

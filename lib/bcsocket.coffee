@@ -167,7 +167,11 @@ BCSocket = (url, options) ->
 
   # Messages from the server are passed directly.
   handler.channelHandleArray = (channel, message) ->
-    self['onmessage']? message
+    # Exceptions thrown in channelHandleArray aren't handled well at all.
+    try
+      self['onmessage']? message
+    catch e
+      setTimeout (-> throw e), 0
 
   # This reconnects if the current session is null.
   reconnect = ->

@@ -36,6 +36,6 @@ exports.createServer = (opts, method, callback) ->
     # The callee could check this itself using the server object, but it'll always need
     # to know it, so its easier pulling the port out here.
     port = server.address().port
-    callback server, port
+    callback server, port, bc
 
 
