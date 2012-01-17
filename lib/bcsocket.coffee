@@ -215,7 +215,7 @@ BCSocket = (url, options) ->
     setState BCSocket.CLOSING
 
     # In theory, we don't transition to the CLOSED state until the server has received the disconnect
-    # message. But in practice, disconnect() results in channelClosed() being called happening immediately.
+    # message. But in practice, disconnect() results in channelClosed() being called immediately.
     # The server is still notified, but only really as an afterthought.
     session.disconnect()
 
