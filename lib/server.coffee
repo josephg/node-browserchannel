@@ -953,6 +953,10 @@ module.exports = browserChannel = (options, onConnect) ->
 
   middleware.close = -> session.close() for id, session of sessions
 
+  # This is an undocumented, untested treat - if you pass the HTTP server / connect server to
+  # browserchannel through the options object, it can attach a close listener for you automatically.
+  options.server?.on 'close', middleware.close
+
   middleware
 
 # This will override the timer methods (`setInterval`, etc) with the testing stub versions,
