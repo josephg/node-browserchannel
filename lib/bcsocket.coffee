@@ -99,8 +99,8 @@ BCSocket = (url, options) ->
   handler = new goog.net.BrowserChannel.Handler()
 
   handler.channelOpened = (channel) ->
-    setState BCSocket.OPEN
     lastSession = session
+    setState BCSocket.OPEN
     self['onopen']?()
 
   # If there's an error, the handler's channelError() method is called right before channelClosed().
@@ -135,13 +135,14 @@ BCSocket = (url, options) ->
 
     # Should handle server stop
     return if self.readyState is BCSocket.CLOSED
-    setState BCSocket.CLOSED
 
     # And once channelClosed is called, we won't get any more events from the session. So things like send()
     # should throw exceptions.
     session = null
 
     message = if lastErrorCode then errorMessages[lastErrorCode] else 'Closed'
+
+    setState BCSocket.CLOSED
 
     # This whole method is surrounded in a try-catch block which silently discards exceptions.
     # Thats really annoying for debugging. I'll make sure errors get logged here, at least.
@@ -181,6 +182,8 @@ BCSocket = (url, options) ->
     throw new Error 'Reconnect() called from invalid state' if session
 
     setState BCSocket.CONNECTING
+    self['onconnecting']?()
+
     clearTimeout reconnectTimer
 
     session = new goog.net.BrowserChannel options['appVersion']
