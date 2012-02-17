@@ -171,6 +171,14 @@ module.exports = testCase
     # Actually calling the callback starts the test.
     createServer ((session) => @onSession session), (@server, @port, @bc) =>
 
+      # TODO - This should be exported from lib/server
+      @standardHeaders=
+        'Content-Type': 'text/plain'
+        'Cache-Control': 'no-cache, no-store, max-age=0, must-revalidate'
+        'Pragma': 'no-cache'
+        'Expires': 'Fri, 01 Jan 1990 00:00:00 GMT'
+        'X-Content-Type-Options': 'nosniff'
+
       # I'll add a couple helper methods for tests to easily message the server.
       @get = (path, callback) =>
         http.get {host:'localhost', path, @port}, callback
@@ -295,7 +303,7 @@ module.exports = testCase
           test.strictEqual data, '[null,null]'
           server.close()
           test.done()
-  
+ 
   # node-browserchannel is only responsible for URLs with the specified (or default) prefix. If a request
   # comes in for a URL outside of that path, it should be passed along to subsequent connect middleware.
   #
@@ -325,6 +333,12 @@ module.exports = testCase
   'The server sends accept:JSON header during test phase 1': (test) ->
     @get '/channel/test?VER=8&MODE=init', (res) ->
       test.strictEqual res.headers['x-accept'], 'application/json; application/x-www-form-urlencoded'
+      test.done()
+
+  # All the standard headers should be sent along with X-Accept
+  'The server sends standard headers during test phase 1': (test) ->
+    @get '/channel/test?VER=8&MODE=init', (res) =>
+      test.strictEqual res.headers[k.toLowerCase()].toLowerCase(), v.toLowerCase() for k,v of @standardHeaders
       test.done()
 
   # ## Testing phase 2
@@ -384,6 +398,14 @@ module.exports = testCase
   'Using type=html sets Content-Type: text/html': (test) ->
     r = @get "/channel/test?VER=8&TYPE=html", (response) ->
       test.strictEqual response.headers['content-type'], 'text/html'
+      r.abort()
+      test.done()
+
+  # IE should also get the standard headers
+  'Using type=html gets the standard headers': (test) ->
+    r = @get "/channel/test?VER=8&TYPE=html", (response) =>
+      for k, v of @standardHeaders when k isnt 'Content-Type'
+        test.strictEqual response.headers[k.toLowerCase()].toLowerCase(), v.toLowerCase()
       r.abort()
       test.done()
 
