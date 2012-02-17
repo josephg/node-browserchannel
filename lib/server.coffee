@@ -87,7 +87,8 @@ standardHeaders =
 
 # The one exception to that is requests destined for iframes. They need to
 # have content-type: text/html set for IE to process the juicy JS inside.
-ieHeaders = Object.create standardHeaders
+ieHeaders = {}
+ieHeaders[k] = v for k, v of standardHeaders
 ieHeaders['Content-Type'] = 'text/html'
 
 # Google's browserchannel server adds some junk after the first message data is sent. I
@@ -836,7 +837,8 @@ module.exports = browserChannel = (options, onConnect) ->
         #
         # It might be easier to put these headers in the response body or increment the
         # version, but that might conflict with future browserchannel versions.
-        headers = Object.create standardHeaders
+        headers = {}
+        headers[k] =  v for k, v of standardHeaders
         headers['X-Accept'] = 'application/json; application/x-www-form-urlencoded'
 
         # This is a straight-up normal HTTP request like the forward channel requests.
