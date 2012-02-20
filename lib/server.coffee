@@ -233,17 +233,12 @@ bufferPostData = (req, callback) ->
 # or `null` if there's no data.
 #
 # This function returns null if there's no data or {ofs, json:[...]} or {ofs, maps:[...]}
-decodeData = (req, data) ->
+transformData = (req, data) ->
   if req.headers['content-type'] == 'application/json'
-    data = JSON.parse data
-    return null if data is null # There's no data. This is a valid response.
-
     # We'll restructure it slightly to mark the data as JSON rather than maps.
     {ofs, data} = data
     {ofs, json:data}
   else
-    # Maps. Ugh.
-    data = querystring.parse data
     count = parseInt data.count
     return null if count is 0
 
@@ -268,6 +263,16 @@ decodeData = (req, data) ->
         map[mapKey] = val
 
     {ofs, maps}
+
+# Decode data string body and get an object back
+# Either a query string format or JSON depending on content type
+decodeData = (req, data) ->
+  if req.headers['content-type'] == 'application/json'
+    JSON.parse data
+  else
+    # Maps. Ugh.
+    querystring.parse data
+
 
 # This is a helper method to order the handling of messages / requests / whatever.
 #
@@ -896,14 +901,16 @@ module.exports = browserChannel = (options, onConnect) ->
           session = createSession req.connection.remoteAddress, query, req.headers
           onConnect? session
 
-        bufferPostData req, (data) ->
-          try
-            data = decodeData req, data
-            session._receivedData query.RID, data
-          catch e
+        dataError = (e) ->
             console.warn 'Error parsing forward channel', e.stack
             return sendError res, 400, 'Bad data'
 
+        processData = (data) ->
+          try
+            data = transformData req, data
+            session._receivedData query.RID, data
+          catch e
+            return dataError e
           if session.state is 'init'
             # The initial forward channel request is also used as a backchannel for the server's
             # initial data (session id, etc). This connection is a little bit special - it is always
@@ -923,6 +930,16 @@ module.exports = browserChannel = (options, onConnect) ->
             response = JSON.stringify session._backChannelStatus()
             res.writeHead 200, 'OK', standardHeaders
             res.end "#{response.length}\n#{response}"
+
+        if req.body
+          processData req.body
+        else
+          bufferPostData req, (data) ->
+            try
+              data = decodeData req, data
+            catch e
+              return dataError e
+            processData data
 
       else if req.method is 'GET'
         # ### Back channel
