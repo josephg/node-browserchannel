@@ -81,6 +81,7 @@ standardHeaders =
   'Pragma': 'no-cache'
   'Expires': 'Fri, 01 Jan 1990 00:00:00 GMT'
   'X-Content-Type-Options': 'nosniff'
+  'Access-Control-Allow-Origin': '*'
 
   # Gmail also sends this, though I'm not really sure what it does...
 #  'X-Xss-Protection': '1; mode=block'
