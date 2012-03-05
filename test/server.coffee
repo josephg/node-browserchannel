@@ -178,6 +178,7 @@ module.exports = testCase
         'Pragma': 'no-cache'
         'Expires': 'Fri, 01 Jan 1990 00:00:00 GMT'
         'X-Content-Type-Options': 'nosniff'
+        'Access-Control-Allow-Origin': '*'
 
       # I'll add a couple helper methods for tests to easily message the server.
       @get = (path, callback) =>

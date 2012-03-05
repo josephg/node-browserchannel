@@ -853,7 +853,7 @@ module.exports = browserChannel = (options, onConnect) ->
         # It might be easier to put these headers in the response body or increment the
         # version, but that might conflict with future browserchannel versions.
         headers = {}
-        headers[k] =  v for k, v of standardHeaders
+        headers[k] = v for k, v of standardHeaders
         headers['X-Accept'] = 'application/json; application/x-www-form-urlencoded'
 
         # This is a straight-up normal HTTP request like the forward channel requests.
