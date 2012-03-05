@@ -327,19 +327,20 @@ catch e
 
 # This is mostly to help development, but if the client is recompiled, I'll pull in a new version.
 # This isn't tested by the unit tests - but its not a big deal.
+#
+# The `readFileSync` call here will stop the whole server while the client is reloaded.
+# This will only happen during development so its not a big deal.
 if process.platform is "win32"
+  # Windows doesn't support watchFile. See:
+  # https://github.com/josephg/node-browserchannel/pull/6
   fs.watch clientFile, persistent: false, (event, filename) ->
     if event is "change"
-      # Putting a synchronous file call here will stop the whole server while the client is reloaded.
-      # Again, this will only happen during development so its not a big deal.
       console.log "Reloading client JS"
       clientCode = fs.readFileSync clientFile, 'utf8'
       clientStats = curr
 else
   fs.watchFile clientFile, persistent: false, (curr, prev) ->
     if curr.mtime.getTime() isnt prev.mtime.getTime()
-      # Putting a synchronous file call here will stop the whole server while the client is reloaded.
-      # Again, this will only happen during development so its not a big deal.
       console.log "Reloading client JS"
       clientCode = fs.readFileSync clientFile, 'utf8'
       clientStats = curr
