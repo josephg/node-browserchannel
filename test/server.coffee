@@ -178,7 +178,6 @@ module.exports = testCase
         'Pragma': 'no-cache'
         'Expires': 'Fri, 01 Jan 1990 00:00:00 GMT'
         'X-Content-Type-Options': 'nosniff'
-        'Access-Control-Allow-Origin': '*'
 
       # I'll add a couple helper methods for tests to easily message the server.
       @get = (path, callback) =>
@@ -304,6 +303,49 @@ module.exports = testCase
           test.strictEqual data, '[null,null]'
           server.close()
           test.done()
+
+  # You can control the CORS header ('Access-Control-Allow-Origin') using options.cors.
+  'CORS header is not sent if its not set in the options': (test) ->
+    @get '/channel/test?VER=8&MODE=init', (response) ->
+      test.strictEqual response.headers['access-control-allow-origin'], undefined
+      test.done()
+
+  'CORS header is sent during the initial phase if its set in the options': (test) ->
+    createServer cors:'foo.com', (->), (server, port) ->
+      http.get {path:'/channel/test?VER=8&MODE=init', host: 'localhost', port: port}, (response) ->
+        test.strictEqual response.headers['access-control-allow-origin'], 'foo.com'
+        server.close()
+        test.done()
+
+  'CORS header is set on the backchannel response': (test) ->
+    server = port = null
+
+    sessionCreated = (session) ->
+      # Make the backchannel flush as soon as its opened
+      session.send "flush"
+
+      req = http.get {path:"/channel/bind?VER=8&RID=rpc&SID=#{session.id}&AID=0&TYPE=xmlhttp&CI=0", host:'localhost', port:port}, (res) =>
+        test.strictEqual res.headers['access-control-allow-origin'], 'foo.com'
+        req.abort()
+        server.close()
+        test.done()
+    
+    createServer cors:'foo.com', sessionCreated, (_server, _port) ->
+      [server, port] = [_server, _port]
+
+      req = http.request {method:'POST', path:'/channel/bind?VER=8&RID=1000&t=1', host:'localhost', port:port}, (res) =>
+      req.end 'count=0'
+
+  'Additional headers can be specified in the options': (test) ->
+    createServer headers:{'X-Foo':'bar'}, (->), (server, port) ->
+      http.get {path:'/channel/test?VER=8&MODE=init', host: 'localhost', port: port}, (response) ->
+        test.strictEqual response.headers['x-foo'], 'bar'
+        server.close()
+        test.done()
+
+  # Interestingly, the CORS header isn't required for old IE (type=html) requests because they're loaded using
+  # iframes anyway. (Though this should really be tested).
+
  
   # node-browserchannel is only responsible for URLs with the specified (or default) prefix. If a request
   # comes in for a URL outside of that path, it should be passed along to subsequent connect middleware.

@@ -69,6 +69,20 @@ defaultOptions =
   # session completely. This will happen whenever a user closes their browser.
   sessionTimeoutInterval: 30 * 1000
 
+  # By default, browsers don't allow access via javascript to foreign sites. You can use the
+  # cors: option to set the Access-Control-Allow-Origin header in responses, which tells browsers
+  # whether or not to allow cross domain requests to be sent.
+  #
+  # See https://developer.mozilla.org/en/http_access_control for more information.
+  #
+  # Setting cors:'*' will enable javascript from any domain to access your application. BE CAREFUL!
+  # If your application uses cookies to manage user sessions, javascript on a foreign site could
+  # make requests as if it were acting on behalf of one of your users.
+  cors: null
+
+  # A user can override all the headers if they want by setting the headers option to an object.
+  headers: null
+
 # All server responses set some standard HTTP headers.
 # To be honest, I don't know how many of these are necessary. I just copied
 # them from google.
@@ -81,7 +95,6 @@ standardHeaders =
   'Pragma': 'no-cache'
   'Expires': 'Fri, 01 Jan 1990 00:00:00 GMT'
   'X-Content-Type-Options': 'nosniff'
-  'Access-Control-Allow-Origin': '*'
 
   # Gmail also sends this, though I'm not really sure what it does...
 #  'X-Xss-Protection': '1; mode=block'
@@ -115,7 +128,7 @@ a9fe92fedacffff48092ee693af\n"
 # - The first *bind* connection a client makes. The server sends arrays there, but the
 #   connection is a POST and it returns immediately. So that request happens using XHR/Trident
 #   like regular forward channel requests.
-messagingMethods = (query, res) ->
+messagingMethods = (options, query, res) ->
   type = query.TYPE
   if type == 'html'
     junkSent = false
@@ -163,12 +176,12 @@ messagingMethods = (query, res) ->
 
   else
     # For normal XHR requests, we send data normally.
-    writeHead: -> res.writeHead 200, 'OK', standardHeaders
+    writeHead: -> res.writeHead 200, 'OK', options.headers
     write: (data) -> res.write "#{data.length}\n#{data}"
     writeRaw: (data) -> res.write data
     end: -> res.end()
     writeError: (statusCode, message) ->
-      res.writeHead statusCode, standardHeaders
+      res.writeHead statusCode, options.headers
       res.end message
 
 # For telling the client its done bad.
@@ -359,6 +372,10 @@ module.exports = browserChannel = (options, onConnect) ->
   options ||= {}
   options[option] ?= value for option, value of defaultOptions
 
+  options.headers = {} unless options.headers
+  options.headers[h] ||= v for h, v of standardHeaders
+  options.headers['Access-Control-Allow-Origin'] = options.cors if options.cors
+
   # Strip off a trailing slash in base.
   base = options.base
   base = base[... base.length - 1] if base.match /\/$/
@@ -475,7 +492,7 @@ module.exports = browserChannel = (options, onConnect) ->
 
       backChannel =
         res: res
-        methods: messagingMethods query, res
+        methods: messagingMethods options, query, res
         chunk: query.CI == '0'
         bytesSent: 0
         listener: ->
@@ -808,7 +825,7 @@ module.exports = browserChannel = (options, onConnect) ->
     # If base is /foo, we don't match /foobar. (Currently no unit tests for this)
     return next() if pathname.substring(0, base.length + 1) != "#{base}/"
 
-    {writeHead, write, writeRaw, end, writeError} = messagingMethods query, res
+    {writeHead, write, writeRaw, end, writeError} = messagingMethods options, query, res
 
     # # Serving the client
     #
@@ -865,7 +882,7 @@ module.exports = browserChannel = (options, onConnect) ->
         # It might be easier to put these headers in the response body or increment the
         # version, but that might conflict with future browserchannel versions.
         headers = {}
-        headers[k] = v for k, v of standardHeaders
+        headers[k] = v for k, v of options.headers
         headers['X-Accept'] = 'application/json; application/x-www-form-urlencoded'
 
         # This is a straight-up normal HTTP request like the forward channel requests.
@@ -938,7 +955,7 @@ module.exports = browserChannel = (options, onConnect) ->
             # initial data (session id, etc). This connection is a little bit special - it is always
             # encoded using length-prefixed json encoding and it is closed as soon as the first chunk is
             # sent.
-            res.writeHead 200, 'OK', standardHeaders
+            res.writeHead 200, 'OK', options.headers
             session._setBackChannel res, CI:1, TYPE:'xmlhttp', RID:'rpc'
             session.flush()
           else if session.state is 'closed'
@@ -950,7 +967,7 @@ module.exports = browserChannel = (options, onConnect) ->
             # if our backchannel is still live and telling it how many unconfirmed
             # arrays we have.
             response = JSON.stringify session._backChannelStatus()
-            res.writeHead 200, 'OK', standardHeaders
+            res.writeHead 200, 'OK', options.headers
             res.end "#{response.length}\n#{response}"
 
         if req.body
@@ -979,17 +996,17 @@ module.exports = browserChannel = (options, onConnect) ->
           #
           # The client implements this using an img= appended to the page.
           session?._disconnectAt query.RID
-          res.writeHead 200, 'OK', standardHeaders
+          res.writeHead 200, 'OK', options.headers
           res.end()
 
       else
-        res.writeHead 405, 'Method Not Allowed', standardHeaders
+        res.writeHead 405, 'Method Not Allowed', options.headers
         res.end "Method not allowed"
 
     else
       # We'll 404 the user instead of letting another handler take care of it.
       # Users shouldn't be using the specified URL prefix for anything else.
-      res.writeHead 404, 'Not Found', standardHeaders
+      res.writeHead 404, 'Not Found', options.headers
       res.end "Not found"
 
   middleware.close = -> session.close() for id, session of sessions
