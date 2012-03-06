@@ -478,8 +478,14 @@ module.exports = browserChannel = (options, onConnect) ->
         methods: messagingMethods query, res
         chunk: query.CI == '0'
         bytesSent: 0
+        listener: ->
+          backChannel.listener = null
+          clearBackChannel res
 
-      res.connection.once 'close', -> clearBackChannel(res)
+      # When the TCP connection underlying the backchannel request is closed, we'll stop using the
+      # backchannel and start the session timeout clock. The listener is kept so the event handler 
+      # removed once the backchannel is closed.
+      res.connection.once 'close', backChannel.listener
 
       # We'll start the heartbeat interval and clear out the session timeout.
       # The session timeout will be started again if the backchannel connection closes for
@@ -509,6 +515,12 @@ module.exports = browserChannel = (options, onConnect) ->
       # Its important that we only delete the backchannel if the closed connection is actually
       # the backchannel we're currently using.
       return if res? and res != backChannel.res
+
+      if backChannel.listener
+        # The backchannel listener has been attached to the 'close' event of the underlying TCP
+        # stream. We don't care about that anymore
+        backChannel.res.connection.removeListener 'close', backChannel.listener
+        backChannel.listener = null
 
       # Conveniently, clearTimeout has no effect if the argument is null.
       clearTimeout heartbeat
