@@ -92,6 +92,30 @@ expect = (res, str, callback) ->
 # is a real delay, not a stubbed out timer like we give to the server.
 soon = (f) -> setTimeout f, 10
 
+readLengthPrefixedString = (res, callback) ->
+  data = ''
+  length = null
+  res.on 'data', listener = (chunk) ->
+    data += chunk.toString 'utf8'
+
+    if length == null
+      # The number of bytes is written in an int on the first line.
+      lines = data.split '\n'
+      # If lines length > 1, then we've read the first newline, which was after the length
+      # field.
+      if lines.length > 1
+        length = parseInt lines.shift()
+
+        # Now we'll rewrite the data variable to not include the length.
+        data = lines.join '\n'
+
+    if data.length == length
+      res.removeListener 'data', listener
+      callback data
+    else if data.length > length
+      console.warn data
+      throw new Error "Read more bytes from stream than expected"
+
 # The backchannel is implemented using a bunch of messages which look like this:
 #
 # ```
@@ -116,29 +140,8 @@ soon = (f) -> setTimeout f, 10
 # This is not used when you're on IE, for normal backchannel requests. On IE, data is sent
 # through javascript calls from an iframe.
 readLengthPrefixedJSON = (res, callback) ->
-  data = ''
-  length = null
-  res.on 'data', listener = (chunk) ->
-    data += chunk.toString 'utf8'
-
-    if length == null
-      # The number of bytes is written in an int on the first line.
-      lines = data.split '\n'
-      # If lines length > 1, then we've read the first newline, which was after the length
-      # field.
-      if lines.length > 1
-        length = parseInt lines.shift()
-
-        # Now we'll rewrite the data variable to not include the length.
-        data = lines.join '\n'
-
-    if data.length == length
-      obj = JSON.parse data
-      res.removeListener 'data', listener
-      callback obj
-    else if data.length > length
-      console.warn data
-      throw new Error "Read more bytes from stream than expected"
+  readLengthPrefixedString res, (data) ->
+    callback JSON.parse(data)
 
 # Copied from google's implementation. The contents of this aren't actually relevant,
 # but I think its important that its pseudo-random so if the connection is compressed,
