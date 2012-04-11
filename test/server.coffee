@@ -666,6 +666,17 @@ module.exports = testCase
         test.deepEqual data, [[0, ['c', @session.id, null, 8]], [1, testData]]
         test.done()
 
+  'The server escapes tricky characters before sending JSON over the wire': (test) ->
+    testData = {'a': 'hello\u2028\u2029there\u2028\u2029'}
+    @onSession = (@session) =>
+      @session.send testData
+
+    # I'm not using @connect because we need to know about the response to the first POST.
+    @post '/channel/bind?VER=8&RID=1000&t=1', 'count=0', (res) =>
+      readLengthPrefixedString res, (data) =>
+        test.deepEqual data, """[[0,["c","#{@session.id}",null,8]],[1,{"a":"hello\\u2028\\u2029there\\u2028\\u2029"}]]\n"""
+        test.done()
+
   'The server buffers data if no backchannel is available': (test) -> @connect ->
     testData = ['hello', 'there', null, 1000, {}, [], [555]]
 
