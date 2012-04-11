@@ -740,6 +740,11 @@ module.exports = browserChannel = (options, onConnect) ->
             data = ([id, data] for {id, data} in arrays)
             bytes = JSON.stringify(data) + "\n"
 
+            # Stand back, pro hax! Ideally there is a general solution for escaping these characters
+            # when converting to JSON.
+            bytes = bytes.replace(/\u2028/g, "\\u2028")
+            bytes = bytes.replace(/\u2029/g, "\\u2029")
+
             # **Away!**
             backChannel.methods.write bytes
             backChannel.bytesSent += bytes.length
