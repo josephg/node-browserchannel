@@ -2672,13 +2672,7 @@ $ = function(a, b) {
     }
   };
   c.channelHandleArray = function(a, b) {
-    try {
-      return typeof m.onmessage === "function" ? m.onmessage(b) : h
-    }catch(c) {
-      return setTimeout(function() {
-        g(c)
-      }, 0)
-    }
+    return typeof m.onmessage === "function" ? m.onmessage(b) : h
   };
   f = function() {
     n && g(Error("Reconnect() called from invalid state"));

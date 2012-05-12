@@ -45,8 +45,10 @@ nodeunit = window?.nodeunit or require 'nodeunit'
 
 if process.title is 'node'
   bc = require '..'
-  # This is awkward, but it makes sure coffeesript doesn't redefine BCSocket on the web.
-  BCSocket ?= bc.BCSocket
+  # If coffeescript declares a variable called 'BCSocket' here, it will shadow the BCSocket variable
+  # that is already defined in the browser. Doing it this way is pretty ugly, but it works and the ugliness
+  # is constrained to a test.
+  `BCSocket = bc.BCSocket`
   bc.setDefaultLocation 'http://localhost:4321'
 
 module.exports = nodeunit.testCase
