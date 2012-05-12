@@ -70,6 +70,7 @@ goog.net.BrowserChannel['Error'] =
   'BLOCKED':            goog.net.BrowserChannel.Error.BLOCKED
   'BAD_DATA':           goog.net.BrowserChannel.Error.BAD_DATA
   'BAD_RESPONSE':       goog.net.BrowserChannel.Error.BAD_RESPONSE
+  'ACTIVE_X_BLOCKED':   goog.net.BrowserChannel.Error.ACTIVE_X_BLOCKED
 
 goog.net.BrowserChannel['State'] =
   'CLOSED':  goog.net.BrowserChannel.State.CLOSED

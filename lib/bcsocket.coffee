@@ -219,11 +219,11 @@ BCSocket = (url, options) ->
     # The server is still notified, but only really as an afterthought.
     session.disconnect()
 
-  # I really want @send to take a callback which is called when the message is either confirmed
-  # received or failed. However, closure provides no callback when messages are sent.
+  # TODO: Make @send to take a callback which is called when the message is either confirmed
+  # received or failed. The closure library has recently added a mechanism to do this.
   #
-  # Note that you *can* send messages while the channel is connecting. Thats fine - any messages sent then should be sent with the
-  # initial payload.
+  # Note that you *can* send messages while the channel is connecting. Thats fine - any messages sent
+  # then should be sent with the initial payload.
   @['sendMap'] = (map) ->
     # This is the raw way to send messages. This will die if the session isn't connected.
     throw new Error 'Cannot send to a closed connection' if self.readyState in [BCSocket.CLOSING, BCSocket.CLOSED]
