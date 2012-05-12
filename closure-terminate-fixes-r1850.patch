@@ -1,6 +1,6 @@
 Index: closure/goog/net/tmpnetwork.js
 ===================================================================
---- closure/goog/net/tmpnetwork.js	(revision 1518)
+--- closure/goog/net/tmpnetwork.js	(revision 1850)
 +++ closure/goog/net/tmpnetwork.js	(working copy)
 @@ -92,44 +92,26 @@
    var channelDebug = new goog.net.ChannelDebug();
@@ -67,9 +67,9 @@ Index: closure/goog/net/tmpnetwork.js
      }
 Index: closure/goog/net/channelrequest.js
 ===================================================================
---- closure/goog/net/channelrequest.js	(revision 1518)
+--- closure/goog/net/channelrequest.js	(revision 1850)
 +++ closure/goog/net/channelrequest.js	(working copy)
-@@ -913,10 +913,20 @@
+@@ -999,10 +999,20 @@
  goog.net.ChannelRequest.prototype.imgTagGet_ = function() {
    var eltImg = new Image();
    eltImg.src = this.baseUri_;
