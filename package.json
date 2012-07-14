@@ -2,16 +2,14 @@
   "author": "Joseph Gentle <josephg@gmail.com> (http://josephg.com/)",
   "name": "browserchannel",
   "description": "Google BrowserChannel server for NodeJS",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "homepage": "https://github.com/josephg/node-browserchannel",
   "repository": {
     "type": "git",
     "url": "git://github.com/josephg/node-browserchannel.git"
   },
   "main": "index.js",
-  "engines": {
-    "node": "0.4 || 0.6"
-  },
+  "engine": "node >= 0.4.4",
   "scripts": {
     "test": "nodeunit test/server.coffee"
   },
