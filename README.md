@@ -106,6 +106,44 @@ socket.onopen = ->
 
 ---
 
+# How to rebuild the client
+
+The client uses google's [closure library](https://developers.google.com/closure/library/)
+& [compiler](https://developers.google.com/closure/compiler/). There's a couple small bugs that google
+still hasn't fixed in their library (and probably never will), so I have a patch file kicking around.
+
+Rebuilding the client library is annoying, so I keep an up to date compiled copy in `dist/`.
+
+1. Download the closure library
+
+```
+svn checkout http://closure-library.googlecode.com/svn/trunk/ closure-library
+cd closure-library
+```
+
+2. Download the closure compiler
+
+```
+curl http://closure-compiler.googlecode.com/files/compiler-latest.zip > compiler-latest.zip
+unzip compiler-latest.zip compiler.jar
+```
+
+3. Patch the library
+
+```
+patch -p0 <../node-browserchannel/closure-*.patch
+```
+
+4. Build
+
+```
+cd ../node-browserchannel
+make
+```
+
+
+---
+
 ### License
 
 Licensed under the standard MIT license:
