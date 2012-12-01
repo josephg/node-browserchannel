@@ -758,7 +758,8 @@ module.exports = browserChannel = (options, onConnect) ->
                 a.sendcallback?()
                 delete a.sendcallback
 
-            if !backChannel.chunk or backChannel.bytesSent > 10 * 1024
+            # The send callback could have cleared the backchannel by calling close.
+            if backChannel and (!backChannel.chunk or backChannel.bytesSent > 10 * 1024)
               clearBackChannel()
 
           # The first backchannel is the client's initial connection. Once we've sent the first

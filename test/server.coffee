@@ -737,6 +737,18 @@ module.exports = testCase
           @post "/channel/bind?VER=8&RID=1001&SID=#{@session.id}&AID=2", 'count=0', (res) =>
             req.abort()
 
+  # This tests for a regression - if the stop callback closed the connection, the server was crashing.
+  'The send callback can stop the session': (test) -> @connect ->
+    req = @get "/channel/bind?VER=8&RID=rpc&SID=#{@session.id}&AID=1&TYPE=xmlhttp&CI=0", (res) =>
+      # Acknowledge the stop message
+      @post "/channel/bind?VER=8&RID=1001&SID=#{@session.id}&AID=2", 'count=0', (res) =>
+
+    @session.stop =>
+      @session.close()
+      soon ->
+        req.abort()
+        test.done()
+
   # If there's a proxy in the way which chunks up responses before sending them on, the client adds a
   # &CI=1 argument on the backchannel. This causes the server to end the HTTP query after each message
   # is sent, so the data is sent to the session.
