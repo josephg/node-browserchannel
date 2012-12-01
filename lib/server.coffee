@@ -285,8 +285,10 @@ decodeData = (req, data) ->
     JSON.parse data
   else
     # Maps. Ugh.
-    querystring.parse data
-
+    #
+    # By default, querystring.parse only parses out the first 1000 keys from the data.
+    # maxKeys:0 removes this restriction.
+    querystring.parse data, '&', '=', maxKeys:0
 
 # This is a helper method to order the handling of messages / requests / whatever.
 #

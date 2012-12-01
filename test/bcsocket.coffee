@@ -235,10 +235,13 @@ module.exports = nodeunit.testCase
 
     received = 0
     @socket.onmessage = (message) ->
+      test.equal message.data, received
       received++
 
       test.done() if received == num
 
     process.nextTick =>
-      @socket.sendMap {'aaaaaaaa': 'bbbbbbbb'} for [1..num]
+      # Maps aren't actual JSON. They're just key-value pairs. I don't need to encode i as a string here,
+      # but thats now its sent anyway.
+      @socket.sendMap {data:"#{i}", juuuuuuuuuuuuuuuuunnnnnnnnnk:'waaaazzzzzzuuuuuppppppp'} for i in [0...num]
 
