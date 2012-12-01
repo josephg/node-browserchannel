@@ -7,7 +7,7 @@ browserify = require 'browserify'
 
 server = connect(
   connect.static "#{__dirname}/web"
-  connect.logger()
+  connect.logger 'dev'
   # Compile and host the tests. watch:true means the tests can be edited
   # without restarting the server.
   browserify entry:"#{__dirname}/browsersuite.coffee", watch:true, ignore:['nodeunit', '..']

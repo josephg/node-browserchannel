@@ -949,8 +949,8 @@ module.exports = browserChannel = (options, onConnect) ->
           onConnect? session
 
         dataError = (e) ->
-            console.warn 'Error parsing forward channel', e.stack
-            return sendError res, 400, 'Bad data'
+          console.warn 'Error parsing forward channel', e.stack
+          return sendError res, 400, 'Bad data'
 
         processData = (data) ->
           try
