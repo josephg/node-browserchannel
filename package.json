@@ -16,7 +16,7 @@
   "dependencies": {
     "coffee-script": "~1",
     "hat": "*",
-    "connect": "~1.7",
+    "connect": "~2",
     "timerstub": "*",
     "request": "~2"
   },

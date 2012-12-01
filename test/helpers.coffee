@@ -3,6 +3,7 @@
 # This file contains some misc utility methods which the server & client tests use.
 
 connect = require 'connect'
+http = require 'http'
 browserChannel = require('..').server
 
 # This function provides an easy way for tests to create a new browserchannel server using
@@ -23,7 +24,7 @@ exports.createServer = (opts, method, callback) ->
   # The server is created using connect middleware. I'll simulate other middleware in
   # the stack by adding a second handler which responds with 200, 'Other middleware' to
   # any request.
-  server = connect bc, (req, res, next) ->
+  app = connect bc, (req, res, next) ->
     # I might not actually need to specify the headers here... (If you don't, nodejs provides
     # some defaults).
     res.writeHead 200, 'OK', 'Content-Type': 'text/plain'
@@ -31,7 +32,7 @@ exports.createServer = (opts, method, callback) ->
 
   # Calling server.listen() without a port lets the OS pick a port for us. I don't
   # know why more testing frameworks don't do this by default.
-  server.listen ->
+  server = http.createServer(app).listen ->
     # Obviously, we need to know the port to be able to make requests from the server.
     # The callee could check this itself using the server object, but it'll always need
     # to know it, so its easier pulling the port out here.
