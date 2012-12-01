@@ -46,12 +46,7 @@
 nodeunit = window?.nodeunit or require 'nodeunit'
 
 if process.title is 'node'
-  bc = require '..'
-  # I'd like to just say goog = bc.goog or something, but then coffeescript makes goog a variable,
-  # which overrides goog defined in the window object in a browser.
-  # Doing it this way makes goog a javascript global variable in nodejs, but that hardly matters.
-  goog ?= bc.goog
-  goog.setDefaultLocation 'http://localhost:4321'
+  require('..').setDefaultLocation 'http://localhost:4321'
 
 makeTests = (configure) -> nodeunit.testCase
   setUp: (callback) ->
