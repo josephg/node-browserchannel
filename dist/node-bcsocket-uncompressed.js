@@ -2653,7 +2653,6 @@ $ = function(a, b) {
         g.a.info("Retry count " + g.U + " > new maxRetries " + (g.Ia ? 0 : g.jb) + ". Fail immediately!"), g.o ? (g.o.cancel(), g.ja(g.o)) : (v.clearTimeout(g.D), g.D = l, Z(g, 2))
       }
     }
-    console.log(p);
     return p.gb("" + a + "/test", "" + a + "/bind", l, f != l ? f.X : h, f != l ? f.va : h)
   };
   this.open = function() {

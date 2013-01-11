@@ -145,7 +145,7 @@ messagingMethods = (options, query, res) ->
           # Make sure the domain doesn't contain anything by naughty by `JSON.stringify()`-ing
           # it before passing it to the client. There are XSS vulnerabilities otherwise.
           res.write "<script>try{document.domain=#{JSON.stringify domain};}catch(e){}</script>\n"
-    
+
       write: (data) ->
         # The data is passed to `m()`, which is bound to *onTridentRpcMessage_* in the client.
         res.write "<script>try {parent.m(#{JSON.stringify data})} catch(e) {}</script>\n"
@@ -196,7 +196,7 @@ sendError = (res, statusCode, message) ->
 # ## Parsing client maps from the forward channel
 #
 # The client sends data in a series of url-encoded maps. The data is encoded like this:
-# 
+#
 # ```
 # count=2&ofs=0&req0_x=3&req0_y=10&req1_abc=def
 # ```
@@ -213,7 +213,7 @@ bufferPostData = (req, callback) ->
 # Next, we'll need to decode the incoming client data into an array of objects.
 #
 # The data could be in two different forms:
-# 
+#
 # - Classical browserchannel format, which is a bunch of string->string url-encoded maps
 # - A JSON object
 #
@@ -381,7 +381,7 @@ module.exports = browserChannel = (options, onConnect) ->
   # Strip off a trailing slash in base.
   base = options.base
   base = base[... base.length - 1] if base.match /\/$/
-  
+
   # Add a leading slash back on base
   base = "/#{base}" unless base.match /^\//
 
@@ -502,7 +502,7 @@ module.exports = browserChannel = (options, onConnect) ->
           clearBackChannel res
 
       # When the TCP connection underlying the backchannel request is closed, we'll stop using the
-      # backchannel and start the session timeout clock. The listener is kept so the event handler 
+      # backchannel and start the session timeout clock. The listener is kept so the event handler
       # removed once the backchannel is closed.
       res.connection.once 'close', backChannel.listener
 
@@ -598,7 +598,7 @@ module.exports = browserChannel = (options, onConnect) ->
     # something, but its not really necessary. The client has already connected once the first
     # POST /bind has been received.
     queueArray ['c', session.id, getHostPrefix(), 8]
-        
+
     # Send the array data through the backchannel. This takes an optional callback which
     # will be called with no arguments when the client acknowledges the array, or called with an
     # error object if the client disconnects before the array is sent.
@@ -612,12 +612,12 @@ module.exports = browserChannel = (options, onConnect) ->
       id
 
     # ### Maps
-    # 
+    #
     # The client sends maps to the server using POST requests. Its possible for the requests
     # to come in out of order, so sometimes we need to buffer up incoming maps and reorder them
     # before emitting them to the user.
     #
-    # Each map has an ID (which starts at 0 when the session is first created). 
+    # Each map has an ID (which starts at 0 when the session is first created).
 
     # We'll emit received data to the user immediately if they're in order, but if they're out of order
     # we'll use the little order helper above to order them. The order helper is instructed to not
@@ -767,7 +767,7 @@ module.exports = browserChannel = (options, onConnect) ->
           # The first backchannel is the client's initial connection. Once we've sent the first
           # data chunk to the client, we've officially opened the connection.
           changeState 'ok' if session.state == 'init'
-  
+
     # The client's reported application version, or null. This is sent when the
     # connection is first requested, so you can use it to make your application die / stay
     # compatible with people who don't close their browsers.
@@ -810,7 +810,7 @@ module.exports = browserChannel = (options, onConnect) ->
 
       for {confirmcallback} in outgoingArrays
         confirmcallback?(new Error message || 'closed')
-      
+
       delete sessions[@id]
       #console.log "closed #{@id}"
 
@@ -829,7 +829,7 @@ module.exports = browserChannel = (options, onConnect) ->
   middleware = (req, res, next) ->
     {query, pathname} = parse req.url, true
     #console.warn req.method, req.url
-    
+
     # If base is /foo, we don't match /foobar. (Currently no unit tests for this)
     return next() if pathname.substring(0, base.length + 1) != "#{base}/"
 
@@ -942,7 +942,7 @@ module.exports = browserChannel = (options, onConnect) ->
       # ### Forward Channel
       if req.method == 'POST'
         if session == undefined
-          
+
           # The session is new! Make them a new session object and let the
           # application know.
           session = createSession req.connection.remoteAddress, query, req.headers
@@ -963,6 +963,7 @@ module.exports = browserChannel = (options, onConnect) ->
             # initial data (session id, etc). This connection is a little bit special - it is always
             # encoded using length-prefixed json encoding and it is closed as soon as the first chunk is
             # sent.
+            console.log req
             res.writeHead 200, 'OK', options.headers
             session._setBackChannel res, CI:1, TYPE:'xmlhttp', RID:'rpc'
             session.flush()
