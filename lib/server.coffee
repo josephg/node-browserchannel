@@ -895,6 +895,7 @@ module.exports = browserChannel = (options, onConnect) ->
 
         # This is a straight-up normal HTTP request like the forward channel requests.
         # We don't use the funny iframe write methods.
+        console.log req
         res.writeHead 200, 'OK', headers
         res.end(JSON.stringify [hostPrefix, blockedPrefix])
 
