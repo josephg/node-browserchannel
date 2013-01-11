@@ -3,7 +3,7 @@
 # It is included after browserchannel when you closure compile node-browserchannel.js.
 # This is closure compiled.
 
-# For certain classes of error, browserchannel tries to get a test image from google.com 
+# For certain classes of error, browserchannel tries to get a test image from google.com
 # to check if the connection is still live.
 #
 # It also uses an image object with a particular URL when you call disconnect(), to tell
@@ -28,7 +28,7 @@ Image = ->
         @onerror?()
       else
         @onload?()
- 
+
   this
 
 # Create XHR objects using the nodejs xmlhttprequest library.

@@ -134,8 +134,8 @@ messagingMethods = (options, query, res) ->
     junkSent = false
 
     methods =
-      writeHead: ->
-        res.writeHead 200, 'OK', ieHeaders
+      writeHead: (req) ->
+        res.writeHead 200, 'OK', (headersWithAccessControl options.headers, req)
         res.write '<html><body>'
 
         domain = query.DOMAIN
@@ -145,7 +145,7 @@ messagingMethods = (options, query, res) ->
           # Make sure the domain doesn't contain anything by naughty by `JSON.stringify()`-ing
           # it before passing it to the client. There are XSS vulnerabilities otherwise.
           res.write "<script>try{document.domain=#{JSON.stringify domain};}catch(e){}</script>\n"
-    
+
       write: (data) ->
         # The data is passed to `m()`, which is bound to *onTridentRpcMessage_* in the client.
         res.write "<script>try {parent.m(#{JSON.stringify data})} catch(e) {}</script>\n"
@@ -176,12 +176,12 @@ messagingMethods = (options, query, res) ->
 
   else
     # For normal XHR requests, we send data normally.
-    writeHead: -> res.writeHead 200, 'OK', options.headers
+    writeHead: (req) -> res.writeHead 200, 'OK', (headersWithAccessControl options.headers, req)
     write: (data) -> res.write "#{data.length}\n#{data}"
     writeRaw: (data) -> res.write data
     end: -> res.end()
     writeError: (statusCode, message) ->
-      res.writeHead statusCode, options.headers
+      res.writeHead statusCode, (headersWithAccessControl options.headers, query)
       res.end message
 
 # For telling the client its done bad.
@@ -196,7 +196,7 @@ sendError = (res, statusCode, message) ->
 # ## Parsing client maps from the forward channel
 #
 # The client sends data in a series of url-encoded maps. The data is encoded like this:
-# 
+#
 # ```
 # count=2&ofs=0&req0_x=3&req0_y=10&req1_abc=def
 # ```
@@ -213,7 +213,7 @@ bufferPostData = (req, callback) ->
 # Next, we'll need to decode the incoming client data into an array of objects.
 #
 # The data could be in two different forms:
-# 
+#
 # - Classical browserchannel format, which is a bunch of string->string url-encoded maps
 # - A JSON object
 #
@@ -290,6 +290,8 @@ decodeData = (req, data) ->
     # maxKeys:0 removes this restriction.
     querystring.parse data, '&', '=', maxKeys:0
 
+
+
 # This is a helper method to order the handling of messages / requests / whatever.
 #
 # Use it like this:
@@ -360,6 +362,17 @@ else
       clientCode = fs.readFileSync clientFile, 'utf8'
       clientStats = curr
 
+# Build custom headers to respond to requests with Access-Control set to their origin if appropriate
+headersWithAccessControl = (headersTemplate, req) ->
+  headers = {}
+  headers[k] = v for k, v of headersTemplate
+  # In case we're serving a credentialed request, we set allow-origin to the specific origin of this request
+  # http://stackoverflow.com/questions/6146414/using-ajax-with-cookies
+  console.log 'This request has no headers (browerchannel server.coffee):', req if !req.headers # should never happen
+  headers['Access-Control-Allow-Origin'] = req.headers.origin if headers['Access-Control-Allow-Origin'] == '*' && req.headers
+  headers['Access-Control-Allow-Origin'] = req.headers.origin if headersTemplate['Access-Control-Allow-Origin-Pattern']?.test(req.headers?.origin)
+  headers
+
 # ---
 #
 # # The server middleware
@@ -377,11 +390,15 @@ module.exports = browserChannel = (options, onConnect) ->
   options.headers = {} unless options.headers
   options.headers[h] ||= v for h, v of standardHeaders
   options.headers['Access-Control-Allow-Origin'] = options.cors if options.cors
+  options.headers['Access-Control-Allow-Origin-Pattern'] = options.corsPattern if options.corsPattern
+  options.headers['Access-Control-Allow-Credentials'] = 'true' if options.cors || options.corsPattern
+  options.headers['Access-Control-Allow-Methods'] = '*' if options.cors || options.corsPattern
+  options.headers['Access-Control-Allow-Headers'] = '*' if options.cors || options.corsPattern
 
   # Strip off a trailing slash in base.
   base = options.base
   base = base[... base.length - 1] if base.match /\/$/
-  
+
   # Add a leading slash back on base
   base = "/#{base}" unless base.match /^\//
 
@@ -502,7 +519,7 @@ module.exports = browserChannel = (options, onConnect) ->
           clearBackChannel res
 
       # When the TCP connection underlying the backchannel request is closed, we'll stop using the
-      # backchannel and start the session timeout clock. The listener is kept so the event handler 
+      # backchannel and start the session timeout clock. The listener is kept so the event handler
       # removed once the backchannel is closed.
       res.connection.once 'close', backChannel.listener
 
@@ -598,7 +615,7 @@ module.exports = browserChannel = (options, onConnect) ->
     # something, but its not really necessary. The client has already connected once the first
     # POST /bind has been received.
     queueArray ['c', session.id, getHostPrefix(), 8]
-        
+
     # Send the array data through the backchannel. This takes an optional callback which
     # will be called with no arguments when the client acknowledges the array, or called with an
     # error object if the client disconnects before the array is sent.
@@ -612,12 +629,12 @@ module.exports = browserChannel = (options, onConnect) ->
       id
 
     # ### Maps
-    # 
+    #
     # The client sends maps to the server using POST requests. Its possible for the requests
     # to come in out of order, so sometimes we need to buffer up incoming maps and reorder them
     # before emitting them to the user.
     #
-    # Each map has an ID (which starts at 0 when the session is first created). 
+    # Each map has an ID (which starts at 0 when the session is first created).
 
     # We'll emit received data to the user immediately if they're in order, but if they're out of order
     # we'll use the little order helper above to order them. The order helper is instructed to not
@@ -767,7 +784,7 @@ module.exports = browserChannel = (options, onConnect) ->
           # The first backchannel is the client's initial connection. Once we've sent the first
           # data chunk to the client, we've officially opened the connection.
           changeState 'ok' if session.state == 'init'
-  
+
     # The client's reported application version, or null. This is sent when the
     # connection is first requested, so you can use it to make your application die / stay
     # compatible with people who don't close their browsers.
@@ -810,7 +827,7 @@ module.exports = browserChannel = (options, onConnect) ->
 
       for {confirmcallback} in outgoingArrays
         confirmcallback?(new Error message || 'closed')
-      
+
       delete sessions[@id]
       #console.log "closed #{@id}"
 
@@ -829,7 +846,7 @@ module.exports = browserChannel = (options, onConnect) ->
   middleware = (req, res, next) ->
     {query, pathname} = parse req.url, true
     #console.warn req.method, req.url
-    
+
     # If base is /foo, we don't match /foobar. (Currently no unit tests for this)
     return next() if pathname.substring(0, base.length + 1) != "#{base}/"
 
@@ -895,7 +912,7 @@ module.exports = browserChannel = (options, onConnect) ->
 
         # This is a straight-up normal HTTP request like the forward channel requests.
         # We don't use the funny iframe write methods.
-        res.writeHead 200, 'OK', headers
+        res.writeHead 200, 'OK', (headersWithAccessControl headers, req)
         res.end(JSON.stringify [hostPrefix, blockedPrefix])
 
       else
@@ -905,7 +922,7 @@ module.exports = browserChannel = (options, onConnect) ->
         #
         # The client should get the data in 2 chunks - but they won't if there's a misbehaving
         # corporate proxy in the way or something.
-        writeHead()
+        writeHead(req)
         writeRaw '11111'
         setTimeout (-> writeRaw '2'; end()), 2000
 
@@ -942,15 +959,15 @@ module.exports = browserChannel = (options, onConnect) ->
       # ### Forward Channel
       if req.method == 'POST'
         if session == undefined
-          
+
           # The session is new! Make them a new session object and let the
           # application know.
           session = createSession req.connection.remoteAddress, query, req.headers
           onConnect? session
 
         dataError = (e) ->
-          console.warn 'Error parsing forward channel', e.stack
-          return sendError res, 400, 'Bad data'
+            console.warn 'Error parsing forward channel', e.stack
+            return sendError res, 400, 'Bad data'
 
         processData = (data) ->
           try
@@ -963,7 +980,7 @@ module.exports = browserChannel = (options, onConnect) ->
             # initial data (session id, etc). This connection is a little bit special - it is always
             # encoded using length-prefixed json encoding and it is closed as soon as the first chunk is
             # sent.
-            res.writeHead 200, 'OK', options.headers
+            res.writeHead 200, 'OK', (headersWithAccessControl options.headers, req)
             session._setBackChannel res, CI:1, TYPE:'xmlhttp', RID:'rpc'
             session.flush()
           else if session.state is 'closed'
@@ -975,7 +992,7 @@ module.exports = browserChannel = (options, onConnect) ->
             # if our backchannel is still live and telling it how many unconfirmed
             # arrays we have.
             response = JSON.stringify session._backChannelStatus()
-            res.writeHead 200, 'OK', options.headers
+            res.writeHead 200, 'OK', (headersWithAccessControl options.headers, req)
             res.end "#{response.length}\n#{response}"
 
         if req.body
@@ -996,7 +1013,7 @@ module.exports = browserChannel = (options, onConnect) ->
         if query.TYPE in ['xmlhttp', 'html']
           return sendError res, 400, 'Invalid SID' if typeof query.SID != 'string' && query.SID.length < 5
           return sendError res, 400, 'Expected RPC' unless query.RID is 'rpc'
-          writeHead()
+          writeHead(req)
           session._setBackChannel res, query
         # The client can manually disconnect by making a GET request with TYPE='terminate'
         else if query.TYPE is 'terminate'
@@ -1004,17 +1021,17 @@ module.exports = browserChannel = (options, onConnect) ->
           #
           # The client implements this using an img= appended to the page.
           session?._disconnectAt query.RID
-          res.writeHead 200, 'OK', options.headers
+          res.writeHead 200, 'OK', (headersWithAccessControl options.headers, req)
           res.end()
 
       else
-        res.writeHead 405, 'Method Not Allowed', options.headers
+        res.writeHead 405, 'Method Not Allowed', (headersWithAccessControl options.headers, req)
         res.end "Method not allowed"
 
     else
       # We'll 404 the user instead of letting another handler take care of it.
       # Users shouldn't be using the specified URL prefix for anything else.
-      res.writeHead 404, 'Not Found', options.headers
+      res.writeHead 404, 'Not Found', (headersWithAccessControl options.headers, req)
       res.end "Not found"
 
   middleware.close = -> session.close() for id, session of sessions
