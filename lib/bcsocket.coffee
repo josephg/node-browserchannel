@@ -8,7 +8,7 @@
 #       socket.send 'hi mum!'
 #     socket.onmessage = (message) ->
 #       console.log 'got message', message
-# 
+#
 # ... etc. See here for specs:
 # http://dev.w3.org/html5/websockets/
 #
@@ -187,6 +187,8 @@ BCSocket = (url, options) ->
     clearTimeout reconnectTimer
 
     session = new goog.net.BrowserChannel options['appVersion']
+    session.setSupportsCrossDomainXhrs true
+    session.setAllowHostPrefix true
     session.setHandler handler
     lastErrorCode = null
 
@@ -235,7 +237,7 @@ BCSocket = (url, options) ->
   # This sends a map of {JSON:"..."}. It is interpretted as a native message by the server.
   @['send'] = (message) ->
     @['sendMap'] 'JSON': goog.json.serialize message
-  
+
   # Websocket connections are automatically opened.
   reconnect()
 

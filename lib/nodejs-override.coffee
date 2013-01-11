@@ -39,7 +39,6 @@ goog.require 'goog.net.XmlHttpFactory'
 goog.net.BrowserChannel.prototype.createXhrIo = (hostPrefix) ->
   xhrio = new goog.net.XhrIo()
   xhrio.createXhr = -> new XMLHttpRequest()
-  xhrio.setWithCredentials true
   xhrio
 
 # If you specify a relative test / bind path, browserchannel interprets it using window.location.
