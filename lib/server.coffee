@@ -370,7 +370,7 @@ headersWithAccessControl = (headersTemplate, req) ->
   # http://stackoverflow.com/questions/6146414/using-ajax-with-cookies
   console.log 'This request has no headers (browerchannel server.coffee):', req if !req.headers # should never happen
   headers['Access-Control-Allow-Origin'] = req.headers.origin if headers['Access-Control-Allow-Origin'] == '*' && req.headers
-  headers['Access-Control-Allow-Origin'] = req.headers.origin if req.headers?.origin && headersTemplate['Access-Control-Allow-Origin-Pattern'].test(req.headers?.origin)
+  headers['Access-Control-Allow-Origin'] = req.headers.origin if headersTemplate['Access-Control-Allow-Origin-Pattern']?.test(req.headers?.origin)
   headers
 
 # ---
