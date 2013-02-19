@@ -676,9 +676,9 @@ module.exports = browserChannel = (options, onConnect) ->
               if map.JSON?
                 try
                   message = JSON.parse map.JSON
-                  session.emit 'message', message
                 catch e
-                  throw e
+                  session.close 'Invalid JSON'
+                session.emit 'message', message
         else
           # We have data.json. We'll just emit it directly.
           for message in data.json
