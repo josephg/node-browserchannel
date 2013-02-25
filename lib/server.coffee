@@ -129,6 +129,9 @@ a9fe92fedacffff48092ee693af\n"
 #   connection is a POST and it returns immediately. So that request happens using XHR/Trident
 #   like regular forward channel requests.
 messagingMethods = (options, query, res) ->
+  responseClosed = false
+  res.once "close", -> responseClosed = true
+
   type = query.TYPE
   if type == 'html'
     junkSent = false
@@ -157,7 +160,7 @@ messagingMethods = (options, query, res) ->
         # Once the data has been received, the client needs to call `d()`, which is bound to
         # *onTridentDone_* with success=*true*.
         # The weird spacing of this is copied from browserchannel. Its really not necessary.
-        res.end "<script>try  {parent.d(); }catch (e){}</script>\n"
+        res.end "<script>try  {parent.d(); }catch (e){}</script>\n" unless responseClosed
 
       # This is a helper method for signalling an error in the request back to the client.
       writeError: (statusCode, message) ->
@@ -176,13 +179,14 @@ messagingMethods = (options, query, res) ->
 
   else
     # For normal XHR requests, we send data normally.
-    writeHead: -> res.writeHead 200, 'OK', options.headers
-    write: (data) -> res.write "#{data.length}\n#{data}"
-    writeRaw: (data) -> res.write data
-    end: -> res.end()
+    writeHead: -> res.writeHead 200, 'OK', options.headers unless responseClosed
+    write: (data) -> res.write "#{data.length}\n#{data}" unless responseClosed
+    writeRaw: (data) -> res.write data unless responseClosed
+    end: -> res.end() unless responseClosed
     writeError: (statusCode, message) ->
-      res.writeHead statusCode, options.headers
-      res.end message
+      unless responseClosed
+        res.writeHead statusCode, options.headers 
+        res.end message
 
 # For telling the client its done bad.
 #
