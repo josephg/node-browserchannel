@@ -582,9 +582,12 @@ module.exports = browserChannel = (options, onConnect) ->
     # Queue an array to be sent. The optional callbacks notifies a caller when the array has been
     # sent, and then received by the client.
     #
+    # If the session is already closed, we'll call the confirmation callback immediately with the
+    # error.
+    #
     # queueArray returns the ID of the queued data chunk.
     queueArray = (data, sendcallback, confirmcallback) ->
-      throw new Error "Cannot queue array when the session is already closed" if session.state == 'closed'
+      return confirmcallback? new Error 'closed' if session.state is 'closed'
 
       id = ++lastArrayId
       outgoingArrays.push {id, data, sendcallback, confirmcallback}
@@ -812,7 +815,7 @@ module.exports = browserChannel = (options, onConnect) ->
       clearTimeout sessionTimeout
 
       for {confirmcallback} in outgoingArrays
-        confirmcallback?(new Error message || 'closed')
+        confirmcallback? new Error(message || 'closed')
       
       delete sessions[@id]
       #console.log "closed #{@id}"
