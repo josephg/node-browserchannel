@@ -173,7 +173,6 @@ module.exports = testCase
     # 
     # Actually calling the callback starts the test.
     createServer ((session) => @onSession session), (@server, @port, @bc) =>
-
       # TODO - This should be exported from lib/server
       @standardHeaders=
         'Content-Type': 'text/plain'
@@ -225,8 +224,7 @@ module.exports = testCase
     # test without waiting for close(), but then its possible that an exception thrown
     # in one test will appear after the next test has started running. Its easier to debug
     # like this.
-    @server.on 'close', callback
-    @server.close()
+    @server.close callback
   
   # The server hosts the client-side javascript at /channel.js. It should have headers set to tell
   # browsers its javascript.
@@ -311,6 +309,7 @@ module.exports = testCase
   'CORS header is not sent if its not set in the options': (test) ->
     @get '/channel/test?VER=8&MODE=init', (response) ->
       test.strictEqual response.headers['access-control-allow-origin'], undefined
+      response.socket.end()
       test.done()
 
   'CORS header is sent during the initial phase if its set in the options': (test) ->
@@ -371,6 +370,7 @@ module.exports = testCase
   'getting a wacky url inside the bound range returns 404': (test) ->
     @get '/channel/doesnotexist', (response) ->
       test.strictEqual response.statusCode, 404
+      response.socket.end()
       test.done()
 
   # For node-browserchannel, we also accept JSON in forward channel POST data. To tell the client that
@@ -379,12 +379,14 @@ module.exports = testCase
   'The server sends accept:JSON header during test phase 1': (test) ->
     @get '/channel/test?VER=8&MODE=init', (res) ->
       test.strictEqual res.headers['x-accept'], 'application/json; application/x-www-form-urlencoded'
+      res.socket.end()
       test.done()
 
   # All the standard headers should be sent along with X-Accept
   'The server sends standard headers during test phase 1': (test) ->
     @get '/channel/test?VER=8&MODE=init', (res) =>
       test.strictEqual res.headers[k.toLowerCase()].toLowerCase(), v.toLowerCase() for k,v of @standardHeaders
+      res.socket.end()
       test.done()
 
   # ## Testing phase 2
@@ -404,6 +406,7 @@ module.exports = testCase
     makeTest = (type, message1, message2) -> (test) ->
       @get "/channel/test?VER=8&TYPE=#{type}", (response) ->
         test.strictEqual response.statusCode, 200
+
         expect response, message1, ->
           # Its important to make sure that message 2 isn't sent too soon (<2 seconds).
           # We'll advance the server's clock forward by just under 2 seconds and then wait a little bit
@@ -412,9 +415,10 @@ module.exports = testCase
           timer.wait 1999, ->
             soon ->
               response.removeListener 'data', f
-              timer.wait 1, ->
-                expect response, message2, ->
-                  response.once 'end', -> test.done()
+              expect response, message2, ->
+                response.once 'end', -> test.done()
+
+              timer.wait 1
 
     'xmlhttp': makeTest 'xmlhttp', '11111', '2'
 
@@ -469,6 +473,7 @@ module.exports = testCase
     check400 = (path) -> (test) ->
       @get path, (response) ->
         test.strictEqual response.statusCode, 400
+        response.socket.end()
         test.done()
 
     'phase 1, ver 7': check400 '/channel/test?VER=7&MODE=init'
@@ -558,6 +563,7 @@ module.exports = testCase
     check400 = (path) -> (test) ->
       @post path, 'count=0', (response) ->
         test.strictEqual response.statusCode, 400
+        response.socket.end()
         test.done()
     
     'no version': check400 '/channel/bind?RID=1000&t=1'
@@ -572,6 +578,7 @@ module.exports = testCase
         test.done()
 
     @post '/channel/bind?VER=8&RID=1000&t=1', 'count=1&ofs=0&req0_k=v', (res) =>
+      res.socket.end()
   
   # The data received by the server should be properly URL decoded and whatnot.
   'Server messages are properly URL decoded': (test) ->
@@ -581,7 +588,7 @@ module.exports = testCase
         test.done()
 
     @post('/channel/bind?VER=8&RID=1000&t=1',
-      'count=1&ofs=0&req0__int_%5E%26%5E%25%23net=hi%22there%26%26%0Asam', ->)
+      'count=1&ofs=0&req0__int_%5E%26%5E%25%23net=hi%22there%26%26%0Asam', (res) -> res.socket.end())
 
   # After a client connects, it can POST data to the server using URL-encoded POST data. This data
   # is sent by POSTing to /bind?SID=....
@@ -595,6 +602,7 @@ module.exports = testCase
       test.done()
 
     @post "/channel/bind?VER=8&RID=1001&SID=#{@session.id}&AID=0", 'count=1&ofs=0&req0_k=v', (res) =>
+      res.socket.end()
   
   # When the server gets a forwardchannel request, it should reply with a little array saying whats
   # going on.
@@ -735,6 +743,7 @@ module.exports = testCase
 
           # Ok, now we'll only acknowledge the second message by sending AID=2
           @post "/channel/bind?VER=8&RID=1001&SID=#{@session.id}&AID=2", 'count=0', (res) =>
+            res.socket.end()
             req.abort()
 
   # This tests for a regression - if the stop callback closed the connection, the server was crashing.
@@ -742,6 +751,7 @@ module.exports = testCase
     req = @get "/channel/bind?VER=8&RID=rpc&SID=#{@session.id}&AID=1&TYPE=xmlhttp&CI=0", (res) =>
       # Acknowledge the stop message
       @post "/channel/bind?VER=8&RID=1001&SID=#{@session.id}&AID=2", 'count=0', (res) =>
+        res.socket.end()
 
     @session.stop =>
       @session.close()
@@ -889,9 +899,11 @@ module.exports = testCase
   
     # First, send `[{v:2}]`
     @post "/channel/bind?VER=8&RID=1002&SID=#{@session.id}&AID=0", 'count=1&ofs=2&req0_v=2', (res) =>
+      res.socket.end()
     # ... then `[{v:0}, {v:1}]` a few MS later.
     soon =>
       @post "/channel/bind?VER=8&RID=1001&SID=#{@session.id}&AID=0", 'count=2&ofs=0&req0_v=0&req1_v=1', (res) =>
+        res.socket.end()
   
   # Again, think of browserchannel as TCP on top of UDP...
   'Repeated forward channel messages are discarded': (test) -> @connect ->
@@ -904,8 +916,8 @@ module.exports = testCase
         throw new Error 'got map twice'
   
     # POST the maps twice.
-    @post "/channel/bind?VER=8&RID=1001&SID=#{@session.id}&AID=0", 'count=1&ofs=0&req0_v=0', (res) =>
-    @post "/channel/bind?VER=8&RID=1001&SID=#{@session.id}&AID=0", 'count=1&ofs=0&req0_v=0', (res) =>
+    @post "/channel/bind?VER=8&RID=1001&SID=#{@session.id}&AID=0", 'count=1&ofs=0&req0_v=0', (res) => res.socket.end()
+    @post "/channel/bind?VER=8&RID=1001&SID=#{@session.id}&AID=0", 'count=1&ofs=0&req0_v=0', (res) => res.socket.end()
 
     # Wait 50 milliseconds for the map to (maybe!) be received twice, then pass.
     soon ->
@@ -920,8 +932,9 @@ module.exports = testCase
     @session.on 'map', (map) ->
       maps.push map
 
-    @post "/channel/bind?VER=8&RID=1001&SID=#{@session.id}&AID=0", 'count=1&ofs=0&req0_v=0', (res) =>
+    @post "/channel/bind?VER=8&RID=1001&SID=#{@session.id}&AID=0", 'count=1&ofs=0&req0_v=0', (res) => res.socket.end()
     @post "/channel/bind?VER=8&RID=1001&SID=#{@session.id}&AID=0", 'count=2&ofs=0&req0_v=0&req1_v=1', (res) =>
+      res.socket.end()
 
     soon ->
       test.deepEqual maps, [{v:0}, {v:1}]
@@ -973,7 +986,7 @@ module.exports = testCase
   # ghosting problem - if the old session hasn't timed out on the server yet, you can temporarily be in a state where
   # multiple connections represent the same user.
   'If a client disconnects then reconnects, specifying OSID= and OAID=, the old session is destroyed': (test) ->
-    @post '/channel/bind?VER=8&RID=1000&t=1', 'count=0', (res) =>
+    @post '/channel/bind?VER=8&RID=1000&t=1', 'count=0', (res) => res.socket.end()
 
     # I want to check the following things:
     #
@@ -984,7 +997,7 @@ module.exports = testCase
     # Its kinda gross managing all that state in one function...
     @onSession = (session1) =>
       # As soon as the client has connected, we'll fire off a new connection claiming the previous session is old.
-      @post "/channel/bind?VER=8&RID=2000&t=1&OSID=#{session1.id}&OAID=0", 'count=0', (res) =>
+      @post "/channel/bind?VER=8&RID=2000&t=1&OSID=#{session1.id}&OAID=0", 'count=0', (res) => res.socket.end()
 
       c1Closed = false
       session1.on 'close', ->
@@ -1000,7 +1013,7 @@ module.exports = testCase
 
   # The server might have already timed out an old connection. In this case, the OSID is ignored.
   'The server ignores OSID and OAID if the named session doesnt exist': (test) ->
-    @post "/channel/bind?VER=8&RID=2000&t=1&OSID=doesnotexist&OAID=0", 'count=0', (res) =>
+    @post "/channel/bind?VER=8&RID=2000&t=1&OSID=doesnotexist&OAID=0", 'count=0', (res) => res.socket.end()
 
     # So small & pleasant!
     @onSession = (session) =>
@@ -1044,9 +1057,9 @@ module.exports = testCase
       # And now we'll nuke the session and confirm the first two arrays. But first, its important
       # the client has a backchannel to send data to (confirming arrays before a backchannel is opened
       # to receive them is undefined and probably does something bad)
-      req = @get "/channel/bind?VER=8&RID=rpc&SID=#{@session.id}&AID=1&TYPE=xmlhttp&CI=0", (res) =>
+      req = @get "/channel/bind?VER=8&RID=rpc&SID=#{@session.id}&AID=1&TYPE=xmlhttp&CI=0", (res) => res.socket.end()
 
-      @post "/channel/bind?VER=8&RID=2000&t=1&OSID=#{@session.id}&OAID=2", 'count=0', (res) =>
+      @post "/channel/bind?VER=8&RID=2000&t=1&OSID=#{@session.id}&OAID=2", 'count=0', (res) => res.socket.end()
 
   'The session times out after awhile if it doesnt have a backchannel': (test) -> @connect ->
     start = timer.Date.now()
@@ -1072,10 +1085,10 @@ module.exports = testCase
   'If a disconnect message reaches the client before some data, the data is still received': (test) -> @connect ->
     # The disconnect message is sent first, but its got a higher RID. It shouldn't be handled until
     # after the data.
-    @get "/channel/bind?VER=8&RID=1003&SID=#{@session.id}&TYPE=terminate", (res) ->
+    @get "/channel/bind?VER=8&RID=1003&SID=#{@session.id}&TYPE=terminate", (res) -> res.socket.end()
     soon =>
-      @post "/channel/bind?VER=8&RID=1002&SID=#{@session.id}&AID=0", 'count=1&ofs=1&req0_m=2', (res) =>
-      @post "/channel/bind?VER=8&RID=1001&SID=#{@session.id}&AID=0", 'count=1&ofs=0&req0_m=1', (res) =>
+      @post "/channel/bind?VER=8&RID=1002&SID=#{@session.id}&AID=0", 'count=1&ofs=1&req0_m=2', (res) => res.socket.end()
+      @post "/channel/bind?VER=8&RID=1001&SID=#{@session.id}&AID=0", 'count=1&ofs=0&req0_m=1', (res) => res.socket.end()
 
     maps = []
     @session.on 'map', (data) ->
@@ -1091,7 +1104,7 @@ module.exports = testCase
   # Its surprising how often this test fails.
   'The session times out if its backchannel is closed': (test) -> @connect ->
     process.nextTick =>
-      req = @get "/channel/bind?VER=8&RID=rpc&SID=#{@session.id}&AID=0&TYPE=xmlhttp&CI=0", (res) =>
+      req = @get "/channel/bind?VER=8&RID=rpc&SID=#{@session.id}&AID=0&TYPE=xmlhttp&CI=0", (res) => res.socket.end()
 
       # I'll let the backchannel establish itself for a moment, and then nuke it.
       soon =>
@@ -1170,7 +1183,7 @@ module.exports = testCase
 
     'when the session is ghosted': (test) -> @connect ->
       # As soon as the client has connected, we'll fire off a new connection claiming the previous session is old.
-      @post "/channel/bind?VER=8&RID=2000&t=1&OSID=#{@session.id}&OAID=0", 'count=0', (res) =>
+      @post "/channel/bind?VER=8&RID=2000&t=1&OSID=#{@session.id}&OAID=0", 'count=0', (res) => res.socket.end()
 
       @session.send 'hello there', (error) ->
         test.ok error
@@ -1215,7 +1228,7 @@ module.exports = testCase
           test.expect 4
           test.done()
 
-      @get "/channel/bind?VER=8&RID=1001&SID=#{@session.id}&TYPE=terminate", (res) ->
+      @get "/channel/bind?VER=8&RID=1001&SID=#{@session.id}&TYPE=terminate", (res) -> res.socket.end()
 
   'If a session has close() called with no arguments, the send error message says "closed"': (test) -> @connect ->
     @session.send 'hello there', (error) ->
@@ -1267,6 +1280,7 @@ module.exports = testCase
             test.deepEqual data, [[1, ['stop']]]
             test.expect 2
             req.abort()
+            res.socket.end()
             test.done()
 
         @session.stop ->
@@ -1280,6 +1294,7 @@ module.exports = testCase
       @session.close()
       @get "/channel/bind?VER=8&RID=rpc&SID=#{@session.id}&AID=0&TYPE=xmlhttp&CI=0", (res) =>
         test.strictEqual res.statusCode, 400
+        res.socket.end()
         test.done()
 
     'after init': (test) -> @connect ->
@@ -1288,6 +1303,7 @@ module.exports = testCase
 
       @get "/channel/bind?VER=8&RID=rpc&SID=#{@session.id}&AID=0&TYPE=xmlhttp&CI=0", (res) =>
         test.strictEqual res.statusCode, 400
+        res.socket.end()
         test.done()
 
   # If you close immediately, the initial POST gets a 403 response (its probably an auth problem?)
@@ -1298,6 +1314,7 @@ module.exports = testCase
     @post '/channel/bind?VER=8&RID=1000&t=1', 'count=0', (res) ->
       buffer res, (data) ->
         test.strictEqual res.statusCode, 403
+        res.socket.end()
         test.done()
 
   # The session runs as a little state machine. It starts in the 'init' state, then moves to
@@ -1329,6 +1346,7 @@ module.exports = testCase
   # close() also kills any active backchannel connection.
   'close kills the active backchannel': (test) -> @connect ->
     @get "/channel/bind?VER=8&RID=rpc&SID=#{@session.id}&AID=0&TYPE=xmlhttp&CI=0", (res) =>
+      res.socket.end()
       test.done()
 
     # Give it some time for the backchannel to establish itself
@@ -1356,7 +1374,7 @@ module.exports = testCase
     data2 = "hello dear user"
     qs = querystring.stringify count: 2, ofs: 0, req0_JSON: (JSON.stringify data1), req1_JSON: (JSON.stringify data2)
     # I can guarantee qs is awful.
-    @post "/channel/bind?VER=8&RID=1001&SID=#{@session.id}&AID=0", qs, (res) =>
+    @post "/channel/bind?VER=8&RID=1001&SID=#{@session.id}&AID=0", qs, (res) => res.socket.end()
 
     @session.once 'message', (msg) =>
       test.deepEqual msg, data1
@@ -1370,7 +1388,7 @@ module.exports = testCase
     data1 = [{}, {'x':null}, 'hi', '!@#$%^&*()-=', '\'"']
     data2 = "hello dear user"
     qs = querystring.stringify count: 2, ofs: 0, req0_JSON: (JSON.stringify data1), req1_JSON: (JSON.stringify data2)
-    @post "/channel/bind?VER=8&RID=1001&SID=#{@session.id}&AID=0", qs, (res) =>
+    @post "/channel/bind?VER=8&RID=1001&SID=#{@session.id}&AID=0", qs, (res) => res.socket.end()
 
     # I would prefer to have more tests mixing maps and JSON data. I'm better off testing that
     # thoroughly using a randomized tester.
@@ -1418,6 +1436,7 @@ module.exports = testCase
         test.deepEqual data, [[1, null]]
 
         req.abort()
+        res.socket.end()
         test.done()
 
   'Sessions are cancelled when close() is called on the server': (test) -> @connect ->
