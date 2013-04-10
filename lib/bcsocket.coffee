@@ -33,6 +33,13 @@ goog.require 'goog.net.BrowserChannel.Handler'
 goog.require 'goog.net.BrowserChannel.Error'
 goog.require 'goog.net.BrowserChannel.State'
 
+# Uncomment for extra debugging information in the console. This currently breaks nodejs support
+# unfortunately.
+#
+# goog.require 'goog.debug.Console' 
+# goog.debug.Console.instance = new goog.debug.Console()
+# goog.debug.Console.instance.setCapturing(true
+
 # Closure uses numerical error codes. We'll translate them into strings for the user.
 errorMessages = {}
 errorMessages[goog.net.BrowserChannel.Error.OK] = 'Ok'
@@ -95,13 +102,23 @@ BCSocket = (url, options) ->
   # When we reconnect, we'll pass the SID and AID from the previous time we successfully connected.
   lastSession = options.prev
 
+  # Closure has an annoyingly complicated logging system which by default will silently capture &
+  # discard any errors thrown in callbacks. I could enable the logging infrastructure (above), but
+  # I prefer to just log errors as needed.
+  fireCallback = (name, args...) ->
+    try
+      self[name]? args...
+    catch e
+      console?.error e.stack
+      throw e
+
   # A handler is used to receive events back out of the session.
   handler = new goog.net.BrowserChannel.Handler()
 
   handler.channelOpened = (channel) ->
     lastSession = session
     setState BCSocket.OPEN
-    self['onopen']?()
+    fireCallback 'onopen'
 
   # If there's an error, the handler's channelError() method is called right before channelClosed().
   # We'll cache the error so a 'disconnect' handler knows the disconnect reason.
@@ -118,7 +135,7 @@ BCSocket = (url, options) ->
     # I'm not 100% sure what websockets do if there's an error like this. I'm going to assume it has the
     # same behaviour as browserchannel - that is, onclose() is always called if a connection closes, and
     # onerror is called whenever an error occurs.
-    self['onerror']? message, errCode
+    fireCallback 'onerror', message, errCode
 
   reconnectTimer = null
 
@@ -144,12 +161,9 @@ BCSocket = (url, options) ->
 
     setState BCSocket.CLOSED
 
-    # This whole method is surrounded in a try-catch block which silently discards exceptions.
-    # Thats really annoying for debugging. I'll make sure errors get logged here, at least.
+    # This whole method is surrounded in a try-catch block to silently discard exceptions.
     try
-      self['onclose']? message, pendingMaps, undeliveredMaps
-    catch e
-      console?.error e.stack
+      fireCallback 'onclose', message, pendingMaps, undeliveredMaps
 
     # If the error message is STOP, we won't reconnect. That means the server has explicitly requested
     # the client give up trying to reconnect due to some error.
@@ -167,12 +181,7 @@ BCSocket = (url, options) ->
     lastErrorCode = null
 
   # Messages from the server are passed directly.
-  handler.channelHandleArray = (channel, message) ->
-    try
-      self['onmessage']? message
-    catch e
-      console?.error e.stack
-      throw e
+  handler.channelHandleArray = (channel, message) -> fireCallback 'onmessage', message
 
   # This reconnects if the current session is null.
   reconnect = ->
@@ -182,7 +191,7 @@ BCSocket = (url, options) ->
     throw new Error 'Reconnect() called from invalid state' if session
 
     setState BCSocket.CONNECTING
-    self['onconnecting']?()
+    fireCallback 'onconnecting'
 
     clearTimeout reconnectTimer
 

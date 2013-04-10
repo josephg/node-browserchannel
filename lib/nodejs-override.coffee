@@ -46,7 +46,7 @@ goog.net.BrowserChannel.prototype.createXhrIo = (hostPrefix) ->
 #
 # Luckily, nodejs's url.parse module creates an object which is compatible with window.location.
 
-window = {setTimeout, clearTimeout, setInterval, clearInterval}
+window = {setTimeout, clearTimeout, setInterval, clearInterval, console}
 window.location = null
 window.navigator =
   userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_7_2) AppleWebKit/535.1 (KHTML, like Gecko) Chrome/14.0.835.202 Safari/535.1"
