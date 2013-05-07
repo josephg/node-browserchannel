@@ -383,14 +383,14 @@ function db(a, b) {
 ;function H(a, b) {
   var c;
   if(a instanceof H) {
-    this.A = b !== h ? b : a.A, eb(this, a.ma), c = a.Ya, I(this), this.Ya = c, fb(this, a.fa), gb(this, a.ya), hb(this, a.G), ib(this, a.Q.n()), c = a.Ka, I(this), this.Ka = c
+    this.A = b !== h ? b : a.A, eb(this, a.ma), c = a.Za, I(this), this.Za = c, fb(this, a.fa), gb(this, a.ya), hb(this, a.G), ib(this, a.Q.n()), c = a.Ka, I(this), this.Ka = c
   }else {
     if(a && (c = ("" + a).match(Qa))) {
       this.A = !!b;
       eb(this, c[1] || "", j);
       var d = c[2] || "";
       I(this);
-      this.Ya = d ? decodeURIComponent(d) : "";
+      this.Za = d ? decodeURIComponent(d) : "";
       fb(this, c[3] || "", j);
       gb(this, c[4]);
       hb(this, c[5] || "", j);
@@ -405,7 +405,7 @@ function db(a, b) {
 }
 t = H.prototype;
 t.ma = "";
-t.Ya = "";
+t.Za = "";
 t.fa = "";
 t.ya = k;
 t.G = "";
@@ -417,7 +417,7 @@ t.toString = function() {
   b && a.push(kb(b, lb), ":");
   if(b = this.fa) {
     a.push("//");
-    var c = this.Ya;
+    var c = this.Za;
     c && a.push(kb(c, lb), "@");
     a.push(encodeURIComponent("" + b));
     b = this.ya;
@@ -452,7 +452,7 @@ function hb(a, b, c) {
 }
 function ib(a, b, c) {
   I(a);
-  b instanceof jb ? (a.Q = b, a.Q.nb(a.A)) : (c || (b = kb(b, pb)), a.Q = new jb(b, 0, a.A))
+  b instanceof jb ? (a.Q = b, a.Q.ob(a.A)) : (c || (b = kb(b, pb)), a.Q = new jb(b, 0, a.A))
 }
 function J(a, b, c) {
   I(a);
@@ -471,9 +471,9 @@ function K(a) {
 function I(a) {
   a.lc && f(Error("Tried to modify a read-only Uri"))
 }
-t.nb = function(a) {
+t.ob = function(a) {
   this.A = a;
-  this.Q && this.Q.nb(a);
+  this.Q && this.Q.ob(a);
   return this
 };
 function sb(a, b, c, d) {
@@ -594,7 +594,7 @@ function M(a, b) {
   a.A && (c = c.toLowerCase());
   return c
 }
-t.nb = function(a) {
+t.ob = function(a) {
   a && !this.A && (L(this), this.z = k, ab(this.i, function(a, c) {
     var d = c.toLowerCase();
     c != d && (this.remove(c), rb(this, d, a))
@@ -644,13 +644,13 @@ t.Ma = function(a, b, c, d, e, g) {
   this.src = c;
   this.type = d;
   this.capture = !!e;
-  this.ib = g;
+  this.jb = g;
   this.tb = m;
   this.key = ++Bb;
   this.la = m
 };
 t.handleEvent = function(a) {
-  return this.Hb ? this.wa.call(this.ib || this.src, a) : this.wa.handleEvent.call(this.wa, a)
+  return this.Hb ? this.wa.call(this.jb || this.src, a) : this.wa.handleEvent.call(this.wa, a)
 };
 var Cb = !B || B && 9 <= Ma, Db = B && !D("9");
 !C || D("528");
@@ -801,7 +801,7 @@ function Mb(a, b, c, d, e) {
     if(i[l]) {
       p = i[l];
       for(g = 0;g < p.length;g++) {
-        if(i = p[g], i.wa == c && i.ib == e) {
+        if(i = p[g], i.wa == c && i.jb == e) {
           if(i.la) {
             break
           }
@@ -854,7 +854,7 @@ function Pb(a, b, c, d, e) {
     }
     if(a) {
       for(g = 0;g < a.length;g++) {
-        if(a[g].wa == c && a[g].capture == d && a[g].ib == e) {
+        if(a[g].wa == c && a[g].capture == d && a[g].jb == e) {
           Qb(a[g].key);
           break
         }
@@ -1007,7 +1007,7 @@ function Ob(a, b) {
 A(Vb, N);
 t = Vb.prototype;
 t.wb = j;
-t.mb = k;
+t.nb = k;
 t.addEventListener = function(a, b, c, d) {
   Mb(this, a, b, c, d)
 };
@@ -1030,7 +1030,7 @@ t.dispatchEvent = function(a) {
     var d = 1, e, c = c[b], b = j in c, g;
     if(b) {
       e = [];
-      for(g = this;g;g = g.mb) {
+      for(g = this;g;g = g.nb) {
         e.push(g)
       }
       g = c[j];
@@ -1045,7 +1045,7 @@ t.dispatchEvent = function(a) {
           a.currentTarget = e[i], d &= Tb(g, e[i], a.type, m, a) && a.Ua != m
         }
       }else {
-        for(e = this;!a.ja && e && g.B;e = e.mb) {
+        for(e = this;!a.ja && e && g.B;e = e.nb) {
           a.currentTarget = e, d &= Tb(g, e, a.type, m, a) && a.Ua != m
         }
       }
@@ -1059,14 +1059,14 @@ t.dispatchEvent = function(a) {
 t.t = function() {
   Vb.na.t.call(this);
   Sb(this);
-  this.mb = k
+  this.nb = k
 };
 function Wb(a, b) {
   N.call(this);
   this.aa = a || 1;
   this.Ca = b || Q;
-  this.bb = y(this.Bc, this);
-  this.lb = z()
+  this.cb = y(this.Bc, this);
+  this.mb = z()
 }
 A(Wb, Vb);
 Wb.prototype.enabled = m;
@@ -1079,13 +1079,13 @@ t.setInterval = function(a) {
 };
 t.Bc = function() {
   if(this.enabled) {
-    var a = z() - this.lb;
-    0 < a && a < 0.8 * this.aa ? this.r = this.Ca.setTimeout(this.bb, this.aa - a) : (this.dispatchEvent(Xb), this.enabled && (this.r = this.Ca.setTimeout(this.bb, this.aa), this.lb = z()))
+    var a = z() - this.mb;
+    0 < a && a < 0.8 * this.aa ? this.r = this.Ca.setTimeout(this.cb, this.aa - a) : (this.dispatchEvent(Xb), this.enabled && (this.r = this.Ca.setTimeout(this.cb, this.aa), this.mb = z()))
   }
 };
 t.start = function() {
   this.enabled = j;
-  this.r || (this.r = this.Ca.setTimeout(this.bb, this.aa), this.lb = z())
+  this.r || (this.r = this.Ca.setTimeout(this.cb, this.aa), this.mb = z())
 };
 t.stop = function() {
   this.enabled = m;
@@ -1157,7 +1157,7 @@ function bc(a) {
   this.C = d;
   this.Aa = e || 1;
   this.Ba = cc;
-  this.gb = new Yb(this);
+  this.hb = new Yb(this);
   this.Qa = new Wb;
   this.Qa.setInterval(dc)
 }
@@ -1225,7 +1225,7 @@ function jc(a, b) {
   a.Da = 0;
   a.l = a.b.Fa(a.b.Wa() ? b : k);
   0 < a.ka && (a.Ra = new ac(y(a.bc, a, a.l), a.ka));
-  $b(a.gb, a.l, "readystatechange", a.yc);
+  $b(a.hb, a.l, "readystatechange", a.yc);
   var c;
   if(a.u) {
     c = a.u;
@@ -1281,7 +1281,7 @@ t.bc = function(a) {
         this.I = 200 == e;
         this.a.info("XMLHTTP RESP (" + this.C + ") [ attempt " + this.Aa + "]: " + this.pa + "\n" + this.v + "\n" + b + " " + e);
         if(this.I) {
-          if(4 == b && T(this), this.xb ? (uc(this, b, g), Ba && 3 == b && ($b(this.gb, this.Qa, Xb, this.xc), this.Qa.start())) : (vc(this.a, this.C, g, k), wc(this, g)), this.I && !this.X) {
+          if(4 == b && T(this), this.xb ? (uc(this, b, g), Ba && 3 == b && ($b(this.hb, this.Qa, Xb, this.xc), this.Qa.start())) : (vc(this.a, this.C, g, k), wc(this, g)), this.I && !this.X) {
             4 == b ? this.b.ia(this) : (this.I = m, lc(this))
           }
         }else {
@@ -1422,7 +1422,7 @@ function T(a) {
   Hb(a.Ra);
   a.Ra = k;
   a.Qa.stop();
-  var b = a.gb;
+  var b = a.hb;
   Xa(b.j, Qb);
   b.j.length = 0;
   a.l && (b = a.l, a.l = k, b.abort(), b.Ga());
@@ -1589,7 +1589,7 @@ function W(a) {
 }
 W.prototype.Pa = k;
 W.prototype.va = k;
-W.prototype.cb = k;
+W.prototype.eb = k;
 W.prototype.Eb = k;
 function Sc(a, b) {
   this.name = a;
@@ -1679,8 +1679,8 @@ function ad(a) {
   if(!(b = Zc[a])) {
     b = new W(a);
     var c = a.lastIndexOf("."), d = a.substr(c + 1), c = ad(a.substr(0, c));
-    c.cb || (c.cb = {});
-    c.cb[d] = b;
+    c.eb || (c.eb = {});
+    c.eb[d] = b;
     b.Pa = c;
     Zc[a] = b
   }
@@ -1754,16 +1754,16 @@ var fd = /^https?$/i;
 t = ed.prototype;
 t.R = m;
 t.g = k;
-t.Za = k;
+t.$a = k;
 t.Na = "";
 t.Ib = "";
 t.ha = 0;
 t.q = "";
-t.fb = m;
+t.gb = m;
 t.La = m;
-t.jb = m;
+t.kb = m;
 t.$ = m;
-t.Xa = 0;
+t.Ya = 0;
 t.ba = k;
 t.Vb = "";
 t.ac = m;
@@ -1774,13 +1774,13 @@ t.send = function(a, b, c, d) {
   this.q = "";
   this.ha = 0;
   this.Ib = b;
-  this.fb = m;
+  this.gb = m;
   this.R = j;
   this.g = this.vb();
-  this.Za = this.sa ? this.sa.Ea || (this.sa.Ea = zb(this.sa)) : vb.Ea || (vb.Ea = zb(vb));
+  this.$a = this.sa ? this.sa.Ea || (this.sa.Ea = zb(this.sa)) : vb.Ea || (vb.Ea = zb(vb));
   this.g.onreadystatechange = y(this.Nb, this);
   try {
-    X(this.p, Y(this, "Opening Xhr")), this.jb = j, this.g.open(b, a, j), this.jb = m
+    X(this.p, Y(this, "Opening Xhr")), this.kb = j, this.g.open(b, a, j), this.kb = m
   }catch(e) {
     X(this.p, Y(this, "Error opening Xhr: " + e.message));
     gd(this, e);
@@ -1798,7 +1798,7 @@ t.send = function(a, b, c, d) {
   this.Vb && (this.g.responseType = this.Vb);
   "withCredentials" in this.g && (this.g.withCredentials = this.ac);
   try {
-    this.ba && (Q.clearTimeout(this.ba), this.ba = k), 0 < this.Xa && (X(this.p, Y(this, "Will abort after " + this.Xa + "ms if incomplete")), this.ba = Q.setTimeout(y(this.Ba, this), this.Xa)), X(this.p, Y(this, "Sending request")), this.La = j, this.g.send(a), this.La = m
+    this.ba && (Q.clearTimeout(this.ba), this.ba = k), 0 < this.Ya && (X(this.p, Y(this, "Will abort after " + this.Ya + "ms if incomplete")), this.ba = Q.setTimeout(y(this.Ba, this), this.Ya)), X(this.p, Y(this, "Sending request")), this.La = j, this.g.send(a), this.La = m
   }catch(i) {
     X(this.p, Y(this, "Send error: " + i.message)), gd(this, i)
   }
@@ -1807,7 +1807,7 @@ t.vb = function() {
   return this.sa ? xb(this.sa) : xb(vb)
 };
 t.Ba = function() {
-  "undefined" != typeof ca && this.g && (this.q = "Timed out after " + this.Xa + "ms, aborting", this.ha = qc, X(this.p, Y(this, this.q)), this.dispatchEvent("timeout"), this.abort(qc))
+  "undefined" != typeof ca && this.g && (this.q = "Timed out after " + this.Ya + "ms, aborting", this.ha = qc, X(this.p, Y(this, this.q)), this.dispatchEvent("timeout"), this.abort(qc))
 };
 function gd(a, b) {
   a.R = m;
@@ -1818,7 +1818,7 @@ function gd(a, b) {
   id(a)
 }
 function hd(a) {
-  a.fb || (a.fb = j, a.dispatchEvent("complete"), a.dispatchEvent("error"))
+  a.gb || (a.gb = j, a.dispatchEvent("complete"), a.dispatchEvent("error"))
 }
 t.abort = function(a) {
   this.g && this.R && (X(this.p, Y(this, "Aborting")), this.R = m, this.$ = j, this.g.abort(), this.$ = m, this.ha = a || pc, this.dispatchEvent("complete"), this.dispatchEvent("abort"), id(this))
@@ -1828,14 +1828,14 @@ t.t = function() {
   ed.na.t.call(this)
 };
 t.Nb = function() {
-  !this.jb && !this.La && !this.$ ? this.rc() : jd(this)
+  !this.kb && !this.La && !this.$ ? this.rc() : jd(this)
 };
 t.rc = function() {
   jd(this)
 };
 function jd(a) {
   if(a.R && "undefined" != typeof ca) {
-    if(a.Za[1] && 4 == S(a) && 2 == nc(a)) {
+    if(a.$a[1] && 4 == S(a) && 2 == nc(a)) {
       X(a.p, Y(a, "Local request error detected and ignored"))
     }else {
       if(a.La && 4 == S(a)) {
@@ -1901,9 +1901,9 @@ function jd(a) {
 }
 function id(a, b) {
   if(a.g) {
-    var c = a.g, d = a.Za[0] ? ea : k;
+    var c = a.g, d = a.$a[0] ? ea : k;
     a.g = k;
-    a.Za = k;
+    a.$a = k;
     a.ba && (Q.clearTimeout(a.ba), a.ba = k);
     b || a.dispatchEvent("ready");
     try {
@@ -1997,15 +1997,15 @@ t.w = k;
 t.Sa = m;
 t.$b = k;
 t.Ia = k;
-t.kb = k;
+t.lb = k;
 t.G = k;
 t.c = k;
 t.h = -1;
 t.M = k;
-t.ab = k;
+t.bb = k;
 t.V = s("u");
 t.Yb = s("O");
-t.eb = function(a) {
+t.fb = function(a) {
   this.G = a;
   a = od(this.b, this.G);
   U();
@@ -2064,21 +2064,21 @@ t.Ob = function(a, b) {
         return
       }
       this.M = this.b.correctHostPrefix(c[0]);
-      this.ab = c[1]
+      this.bb = c[1]
     }else {
       this.a.debug("TestConnection: Null responseText"), rd(this.b, this)
     }
   }else {
     if(2 == this.c) {
       if(this.Sa) {
-        U(), this.kb = z()
+        U(), this.lb = z()
       }else {
         if("11111" == b) {
           if(U(), this.Sa = j, this.Ia = z(), c = this.Ia - this.$b, hc() || 500 > c) {
             this.h = 200, this.w.cancel(), this.a.debug("Test connection succeeded; using streaming connection"), U(), sd(this.b, this, j)
           }
         }else {
-          U(), this.Ia = this.kb = z(), this.Sa = m
+          U(), this.Ia = this.lb = z(), this.Sa = m
         }
       }
     }
@@ -2088,9 +2088,9 @@ t.ia = function() {
   this.h = this.w.h;
   if(this.w.I) {
     if(0 == this.c) {
-      if(this.a.debug("TestConnection: request complete for initial check"), this.ab) {
+      if(this.a.debug("TestConnection: request complete for initial check"), this.bb) {
         this.c = 1;
-        var a = td(this.b, this.ab, "/mail/images/cleardot.gif");
+        var a = td(this.b, this.bb, "/mail/images/cleardot.gif");
         K(a);
         ld(a.toString(), 5E3, y(this.gc, this), 3, 2E3);
         this.F(mc)
@@ -2098,7 +2098,7 @@ t.ia = function() {
         this.c = 2, pd(this)
       }
     }else {
-      2 == this.c && (this.a.debug("TestConnection: request complete for stage 2"), a = m, (a = hc() ? this.Sa : 200 > this.kb - this.Ia ? m : j) ? (this.a.debug("Test connection succeeded; using streaming connection"), U(), sd(this.b, this, j)) : (this.a.debug("Test connection failed; not using streaming"), U(), sd(this.b, this, m)))
+      2 == this.c && (this.a.debug("TestConnection: request complete for stage 2"), a = m, (a = hc() ? this.Sa : 200 > this.lb - this.Ia ? m : j) ? (this.a.debug("Test connection succeeded; using streaming connection"), U(), sd(this.b, this, j)) : (this.a.debug("Test connection failed; not using streaming"), U(), sd(this.b, this, m)))
     }
   }else {
     this.a.debug("TestConnection: request failed, in state " + this.c), 0 == this.c ? U() : 2 == this.c && U(), rd(this.b, this)
@@ -2152,10 +2152,10 @@ t.Z = 0;
 t.ca = 0;
 t.ec = 5E3;
 t.zc = 1E4;
-t.hb = 2;
+t.ib = 2;
 t.Cb = 2E4;
 t.ka = 0;
-t.ob = m;
+t.Xa = m;
 t.da = 8;
 var vd = 1, xd = new Vb;
 function yd(a) {
@@ -2174,14 +2174,14 @@ function Ad(a) {
 A(Ad, O);
 var cd = "y2f%";
 t = ud.prototype;
-t.eb = function(a, b, c, d, e) {
+t.fb = function(a, b, c, d, e) {
   this.a.debug("connect()");
   U();
   this.G = b;
   this.ta = c || {};
   d && e !== h && (this.ta.OSID = d, this.ta.OAID = e);
   this.a.debug("connectTest_()");
-  Bd(this) && (this.T = new nd(this, this.a), this.T.V(this.u), this.T.Yb(this.O), this.T.eb(a))
+  Bd(this) && (this.T = new nd(this, this.a), this.T.V(this.u), this.T.Yb(this.O), this.T.fb(a))
 };
 function Cd(a) {
   a.T && (a.T.abort(), a.T = k);
@@ -2413,7 +2413,7 @@ t.ia = function(a) {
         this.a.debug("Maybe retrying, last error: " + ec(c, this.h));
         var d;
         if(d = 1 == b) {
-          this.o || this.D ? (this.a.H("Request already in progress"), d = m) : this.c == vd || this.Z >= (this.Ha ? 0 : this.hb) ? d = m : (this.a.debug("Going to retry POST"), this.D = V(y(this.Qb, this, a), Kd(this, this.Z)), this.Z++, d = j)
+          this.o || this.D ? (this.a.H("Request already in progress"), d = m) : this.c == vd || this.Z >= (this.Ha ? 0 : this.ib) ? d = m : (this.a.debug("Going to retry POST"), this.D = V(y(this.Qb, this, a), Kd(this, this.Z)), this.Z++, d = j)
         }
         if(d || 2 == b && Jd(this)) {
           return
@@ -2511,9 +2511,9 @@ function td(a, b, c) {
   return d
 }
 t.Fa = function(a) {
-  a && !this.ob && f(Error("Can't create secondary domain capable XhrIo object."));
+  a && !this.Xa && f(Error("Can't create secondary domain capable XhrIo object."));
   a = new ed;
-  a.ac = this.ob;
+  a.ac = this.Xa;
   return a
 };
 t.isActive = function() {
@@ -2532,7 +2532,7 @@ function U() {
   xd.dispatchEvent(new yd(xd))
 }
 t.Wa = function() {
-  return this.ob || !hc()
+  return this.Xa || !hc()
 };
 function Nd() {
 }
@@ -2591,7 +2591,7 @@ $ = function(a, b) {
     var d;
     d = Od[b];
     e = b;
-    q($.$a);
+    q($.ab);
     return c("onerror", d, b)
   };
   p = k;
@@ -2617,17 +2617,18 @@ $ = function(a, b) {
     c("onconnecting");
     clearTimeout(p);
     r = new ud(b.appVersion);
+    r.Xa = j;
     r.e = d;
     e = k;
     if(b.failFast) {
       var i = r;
       i.Ha = j;
       i.a.info("setFailFast: true");
-      if((i.o || i.D) && i.Z > (i.Ha ? 0 : i.hb)) {
-        i.a.info("Retry count " + i.Z + " > new maxRetries " + (i.Ha ? 0 : i.hb) + ". Fail immediately!"), i.o ? (i.o.cancel(), i.ia(i.o)) : (u.clearTimeout(i.D), i.D = k, Z(i, 2))
+      if((i.o || i.D) && i.Z > (i.Ha ? 0 : i.ib)) {
+        i.a.info("Retry count " + i.Z + " > new maxRetries " + (i.Ha ? 0 : i.ib) + ". Fail immediately!"), i.o ? (i.o.cancel(), i.ia(i.o)) : (u.clearTimeout(i.D), i.D = k, Z(i, 2))
       }
     }
-    return r.eb("" + a + "/test", "" + a + "/bind", k, g != k ? g.W : h, g != k ? g.ua : h)
+    return r.fb("" + a + "/test", "" + a + "/bind", k, g != k ? g.W : h, g != k ? g.ua : h)
   };
   this.open = function() {
     o.readyState !== o.CLOSED && f(Error("Already open"));
@@ -2637,7 +2638,7 @@ $ = function(a, b) {
     clearTimeout(p);
     e = 0;
     if(o.readyState !== $.CLOSED) {
-      q($.$a);
+      q($.ab);
       var a = r;
       a.a.debug("disconnect()");
       Cd(a);
@@ -2661,7 +2662,7 @@ $ = function(a, b) {
   };
   this.sendMap = function(a) {
     var b;
-    ((b = o.readyState) === $.$a || b === $.CLOSED) && f(Error("Cannot send to a closed connection"));
+    ((b = o.readyState) === $.ab || b === $.CLOSED) && f(Error("Cannot send to a closed connection"));
     b = r;
     0 == b.c && f(Error("Invalid operation: sending map when state is closed"));
     1E3 == b.s.length && b.a.H("Already have 1000 queued maps upon queueing " + Gc(a));
@@ -2676,7 +2677,7 @@ $ = function(a, b) {
 };
 $.prototype.CONNECTING = $.CONNECTING = $.CONNECTING = 0;
 $.prototype.OPEN = $.OPEN = $.OPEN = 1;
-$.prototype.CLOSING = $.CLOSING = $.$a = 2;
+$.prototype.CLOSING = $.CLOSING = $.ab = 2;
 $.prototype.CLOSED = $.CLOSED = $.CLOSED = 3;
 ("undefined" !== typeof exports && exports !== k ? exports : window).BCSocket = $;
 var Image, XMLHttpRequest, Qd, Rd, window;
