@@ -57,7 +57,7 @@ buffer = (res, callback) ->
   res.on 'data', (chunk) ->
     #console.warn chunk.toString()
     data.push chunk.toString 'utf8'
-  res.on 'end', -> callback data.join ''
+  res.on 'end', -> callback? data.join ''
 
 # For some tests we expect certain data, delivered in chunks. Wait until we've
 # received at least that much data and strcmp. The response will probably be used more,
@@ -316,6 +316,7 @@ module.exports = testCase
     createServer cors:'foo.com', (->), (server, port) ->
       http.get {path:'/channel/test?VER=8&MODE=init', host: 'localhost', port: port}, (response) ->
         test.strictEqual response.headers['access-control-allow-origin'], 'foo.com'
+        buffer response
         server.close()
         test.done()
 
