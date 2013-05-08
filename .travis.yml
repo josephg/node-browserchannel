@@ -1,2 +1,5 @@
 before_script: "npm install && npm install nodeunit"
 script: "npm test"
+language: node_js
+node_js:
+  - "0.10"
