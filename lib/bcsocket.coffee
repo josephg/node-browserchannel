@@ -200,7 +200,7 @@ BCSocket = (url, options) ->
 
     clearTimeout reconnectTimer
 
-    session = new goog.net.BrowserChannel options['appVersion']
+    session = new goog.net.BrowserChannel options['appVersion'], lastSession?.getFirstTestResults()
     session.setSupportsCrossDomainXhrs true if options['crossDomainXhr']
     session.setHandler handler
     lastErrorCode = null
