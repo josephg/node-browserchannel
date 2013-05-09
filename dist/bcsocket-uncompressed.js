@@ -2585,7 +2585,10 @@ $ = function(a, b) {
     d = de[b];
     e = b;
     s($.Za);
-    return c("onerror", d, b)
+    try {
+      return c("onerror", d, b)
+    }catch(g) {
+    }
   };
   q = k;
   d.channelClosed = function(a, d, g) {

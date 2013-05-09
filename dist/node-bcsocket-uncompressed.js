@@ -2588,7 +2588,10 @@ $ = function(a, b) {
     d = de[b];
     e = b;
     s($.$a);
-    return c("onerror", d, b)
+    try {
+      return c("onerror", d, b)
+    }catch(g) {
+    }
   };
   r = k;
   d.channelClosed = function(a, d, g) {
