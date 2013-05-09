@@ -135,7 +135,12 @@ BCSocket = (url, options) ->
     # I'm not 100% sure what websockets do if there's an error like this. I'm going to assume it has the
     # same behaviour as browserchannel - that is, onclose() is always called if a connection closes, and
     # onerror is called whenever an error occurs.
-    fireCallback 'onerror', message, errCode
+ 
+    # If fireCallback throws, channelClosed (below) never gets called, which in
+    # turn causes the connection to never reconnect. Eat the exceptions so that
+    # doesn't happen.
+    try
+      fireCallback 'onerror', message, errCode
 
   reconnectTimer = null
 
