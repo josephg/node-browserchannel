@@ -13,7 +13,7 @@
 # http://code.google.com/p/closure-library/issues/detail?id=388&sort=-id
 # ... which fixes a couple timing issues in nodejs.
 
-.PHONY: clean, all
+.PHONY: clean, all, test
 
 CLOSURE_DIR = ../closure-library
 CLOSURE_COMPILER = ../closure-library/compiler.jar
@@ -32,12 +32,16 @@ CLOSURE_CFLAGS = \
 
 PRETTY_PRINT = --compiler_flags=--formatting=PRETTY_PRINT
 
-COFFEE = coffee
+COFFEE = ./node_modules/.bin/coffee
+MOCHA = ./node_modules/.bin/mocha
 
 all: dist/bcsocket.js dist/node-bcsocket.js dist/bcsocket-uncompressed.js dist/node-bcsocket-uncompressed.js
 
 clean:
 	rm -rf tmp
+
+test:
+	$(MOCHA)
 
 tmp/%.js: lib/%.coffee
 	$(COFFEE) -bco tmp $+ 

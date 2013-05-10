@@ -11,7 +11,7 @@
   "main": "index.js",
   "engine": "node >= 0.6.2",
   "scripts": {
-    "test": "nodeunit test/server.coffee"
+    "test": "mocha"
   },
   "dependencies": {
     "coffee-script": "~1",

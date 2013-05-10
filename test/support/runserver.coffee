@@ -3,8 +3,7 @@
 
 fs = require 'fs'
 connect = require 'connect'
-browserChannel = require('..').server
-browserify = require 'browserify'
+browserChannel = require('../..').server
 coffee = require 'coffee-script'
 
 server = connect(

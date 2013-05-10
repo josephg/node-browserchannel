@@ -2,7 +2,7 @@
 #
 # Run them by first launching
 #
-#     % coffee test/runserver.coffee
+#     % coffee test/support/runserver.coffee
 #
 # ... Then browsing to localhost:4321 in your browser or running:
 #
@@ -43,6 +43,9 @@
 assert = require 'assert'
 
 if typeof window is 'undefined'
+  try
+    require './support/runserver'
+
   bc = require '..'
   # If coffeescript declares a variable called 'BCSocket' here, it will shadow the BCSocket variable
   # that is already defined in the browser. Doing it this way is pretty ugly, but it works and the ugliness
