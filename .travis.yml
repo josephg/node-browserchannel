@@ -1,4 +1,4 @@
-before_script: "npm install && npm install nodeunit"
+before_script: "npm install"
 script: "npm test"
 language: node_js
 node_js:
