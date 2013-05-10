@@ -9,7 +9,7 @@ coffee = require 'coffee-script'
 server = connect(
   connect.static "#{__dirname}/web"
   connect.static "#{__dirname}/../node_modules/mocha" # for mocha.js, mocha.css
-  connect.logger 'dev'
+  #connect.logger 'dev'
 
   # Compile and host the tests.
   (req, res, next) ->
