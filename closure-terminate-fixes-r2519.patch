@@ -1,8 +1,8 @@
-Index: closure/goog/net/tmpnetwork.js
+Index: goog/net/tmpnetwork.js
 ===================================================================
---- closure/goog/net/tmpnetwork.js	(revision 1850)
-+++ closure/goog/net/tmpnetwork.js	(working copy)
-@@ -92,44 +92,26 @@
+--- goog/net/tmpnetwork.js	(revision 2519)
++++ goog/net/tmpnetwork.js	(working copy)
+@@ -103,44 +103,26 @@
    var channelDebug = new goog.net.ChannelDebug();
    channelDebug.debug('TestLoadImage: loading ' + url);
    var img = new Image();
@@ -15,7 +15,7 @@ Index: closure/goog/net/tmpnetwork.js
 -      channelDebug.dumpException(e);
 -    }
 +  var timer = null;
-+  createHandler = function(result, message) {
++  var createHandler = function(result, message) {
 +    return function() {
 +      try {
 +        channelDebug.debug('TestLoadImage: ' + message);
@@ -65,11 +65,11 @@ Index: closure/goog/net/tmpnetwork.js
      if (img.ontimeout) {
        img.ontimeout();
      }
-Index: closure/goog/net/channelrequest.js
+Index: goog/net/channelrequest.js
 ===================================================================
---- closure/goog/net/channelrequest.js	(revision 1850)
-+++ closure/goog/net/channelrequest.js	(working copy)
-@@ -999,10 +999,20 @@
+--- goog/net/channelrequest.js	(revision 2519)
++++ goog/net/channelrequest.js	(working copy)
+@@ -1037,10 +1037,20 @@
  goog.net.ChannelRequest.prototype.imgTagGet_ = function() {
    var eltImg = new Image();
    eltImg.src = this.baseUri_;
