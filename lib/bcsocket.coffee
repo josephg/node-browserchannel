@@ -149,8 +149,16 @@ BCSocket = (url, options) ->
 
   reconnectTimer = null
 
+  # This will be called whenever the client disconnects or fails to connect for
+  # any reason. When we fail to connect, I'll also fire 'onclose' (even though
+  # onopen is never called!) for two reasons:
+  #
+  # - The state machine goes from CLOSED -> CONNECTING -> CLOSING -> CLOSED, so
+  #   technically we did enter the 'close' state.
+  # - Thats what websockets do (onclose() is called on a websocket if it fails
+  #   to connect).
   handler.channelClosed = (channel, pendingMaps, undeliveredMaps) ->
-    #console.error 'channelClosed', self.readyState
+    #console.trace 'channelClosed ' + self.readyState
 
     # Hm.
     #
