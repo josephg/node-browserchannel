@@ -21,7 +21,6 @@
     "request": "~2"
   },
   "devDependencies": {
-    "browserify": "~1",
-    "nodeunit": "*"
+    "mocha": "*"
   }
 }

@@ -6,7 +6,7 @@
 #
 # ... Then browsing to localhost:4321 in your browser or running:
 #
-#     % nodeunit test/browserchannel.coffee
+#     % mocha test/bcsocket.coffee
 #
 # from the command line. You should do both kinds of testing before pushing.
 #
@@ -40,19 +40,22 @@
 # - After a test run, 4 sessions are allowed to time out by the server. (Its odd because I'm calling
 #   disconnect() in tearDown).
 
+assert = require 'assert'
 
-nodeunit = window?.nodeunit or require 'nodeunit'
-
-if process.title is 'node'
+if typeof window is 'undefined'
   bc = require '..'
   # If coffeescript declares a variable called 'BCSocket' here, it will shadow the BCSocket variable
   # that is already defined in the browser. Doing it this way is pretty ugly, but it works and the ugliness
   # is constrained to a test.
-  `BCSocket = bc.BCSocket`
+  global.BCSocket = bc.BCSocket
   bc.setDefaultLocation 'http://localhost:4321'
 
-module.exports = nodeunit.testCase
-  tearDown: (callback) ->
+
+
+suite 'bcsocket', ->
+  @timeout 5000
+
+  teardown (callback) ->
     if @socket? and @socket.readyState isnt BCSocket.CLOSED
       @socket.onclose = -> callback()
       @socket.close()
@@ -61,127 +64,136 @@ module.exports = nodeunit.testCase
       callback()
 
   # These match websocket codes
-  'states and errors are mapped': (test) ->
-    test.strictEqual BCSocket.CONNECTING, 0
-    test.strictEqual BCSocket.OPEN, 1
-    test.strictEqual BCSocket.CLOSING, 2
-    test.strictEqual BCSocket.CLOSED, 3
+  test 'states and errors are mapped', ->
+    assert.strictEqual BCSocket.CONNECTING, 0
+    assert.strictEqual BCSocket.OPEN, 1
+    assert.strictEqual BCSocket.CLOSING, 2
+    assert.strictEqual BCSocket.CLOSED, 3
 
-    test.strictEqual BCSocket.prototype.CONNECTING, 0
-    test.strictEqual BCSocket.prototype.OPEN, 1
-    test.strictEqual BCSocket.prototype.CLOSING, 2
-    test.strictEqual BCSocket.prototype.CLOSED, 3
-    test.done()
+    assert.strictEqual BCSocket.prototype.CONNECTING, 0
+    assert.strictEqual BCSocket.prototype.OPEN, 1
+    assert.strictEqual BCSocket.prototype.CLOSING, 2
+    assert.strictEqual BCSocket.prototype.CLOSED, 3
 
   # Can we connect to the server?
-  'connect': (test) ->
+  test 'connect', (done) ->
     @socket = new BCSocket '/notify'
-    test.strictEqual @socket.readyState, BCSocket.CONNECTING
+    assert.strictEqual @socket.readyState, BCSocket.CONNECTING
+
+    openCalled = false
 
     @socket.onopen = =>
-      test.strictEqual @socket.readyState, BCSocket.OPEN
+      assert.strictEqual @socket.readyState, BCSocket.OPEN
+      openCalled = true
 
     @socket.onerror = (reason) ->
       throw new Error reason
 
     @socket.onmessage = (message) ->
-      test.deepEqual message, {appVersion: null}
-      test.expect 3
-      test.done()
+      assert.deepEqual message, {appVersion: null}
+      assert.ok openCalled
+      done()
 
   # The socket interface exposes browserchannel's app version thingy through
   # option arguments
-  'connect sends app version': (test) ->
+  test 'connect sends app version', (done) ->
     @socket = new BCSocket '/notify', appVersion: 321
 
     @socket.onmessage = (message) ->
-      test.deepEqual message, {appVersion:321}
-      test.done()
+      assert.deepEqual message, {appVersion:321}
+      done()
 
   # BrowserChannel's native send method sends a string->string map.
   #
   # I want to test that I can send and recieve messages both before we've connected
   # (they should be sent as soon as the connection is established) and after the
   # connection has opened normally.
-  'send maps': do ->
+  suite 'send maps', ->
     # I'll throw some random unicode characters in here just to make sure...
     data = {'foo': 'bar', 'zot': '(◔ ◡ ◔)'}
 
-    m = (callback) -> (test) ->
+    m = (callback) -> (done) ->
       @socket = new BCSocket '/echomap', appVersion: 321
       @socket.onmessage = (message) ->
-        test.deepEqual message, data
-        test.done()
+        assert.deepEqual message, data
+        done()
 
       callback.apply this
     
-    'immediately': m ->
+    test 'immediately', m ->
       @socket.sendMap data
 
-    'after we have connected': m ->
+    test 'after we have connected', m ->
       @socket.onopen = =>
         @socket.sendMap data
 
   # I'll also test the normal send method. This is pretty much the same as above, whereby
   # I'll do the test two ways.
-  'can send and receive JSON messages': do ->
+  suite 'can send and receive JSON messages', ->
     # Vim gets formatting errors with the cat face glyph here. Sad.
     data = [null, 1.5, "hi", {}, [1,2,3], '⚗☗⚑☯']
 
-    m = (callback) -> (test) ->
+    m = (callback) -> (done) ->
       # Using the /echo server not /echomap
       @socket = new BCSocket '/echo', appVersion: 321
       @socket.onmessage = (message) ->
-        test.deepEqual message, data
-        test.done()
+        assert.deepEqual message, data
+        done()
 
       callback.apply this
     
-    'immediately': m ->
+    test 'immediately', m ->
       # Calling send() instead of sendMap()
       @socket.send data
 
-    'after we have connected': m ->
+    test 'after we have connected', m ->
       @socket.onopen = =>
         @socket.send data
 
   # I have 2 disconnect servers which have slightly different timing regarding when they call close()
   # on the session. If close is called immediately, the initial bind request is rejected
   # with a 403 response, before the client connects.
-  'disconnecting immediately results in REQUEST_FAILED and a 403': (test) ->
+  test 'disconnecting immediately results in REQUEST_FAILED and a 403', (done) ->
     @socket = new BCSocket '/dc1'
 
     @socket.onopen = -> throw new Error 'Socket should not have opened'
 
+    onErrorCalled = no
     @socket.onerror = (message, errCode) =>
-      test.strictEqual message, 'Request failed'
-      test.strictEqual errCode, 2
-      test.done()
+      assert.strictEqual message, 'Request failed'
+      assert.strictEqual errCode, 2
+      onErrorCalled = yes
 
     @socket.onclose = ->
-      throw new Error 'orly'
+      # This will be called because technically, the websocket does go into the close state!
+      #
+      # This is exactly what websockets do.
+      assert.ok onErrorCalled
+      done()
 
-  'disconnecting momentarily allows the client to connect, then onclose() is called': (test) ->
+  test 'disconnecting momentarily allows the client to connect, then onclose() is called', (done) ->
     @socket = new BCSocket '/dc2', failFast: yes
 
+    onErrorCalled = no
     @socket.onerror = (message, errCode) =>
       # The error code varies here, depending on some timing parameters & browser.
       # I've seen NO_DATA, REQUEST_FAILED and UNKNOWN_SESSION_ID.
-      test.strictEqual @socket.readyState, @socket.CLOSING
-      test.ok message
-      test.ok errCode
+      assert.strictEqual @socket.readyState, @socket.CLOSING
+      assert.ok message
+      assert.ok errCode
+      onErrorCalled = yes
 
     @socket.onclose = (reason, pendingMaps, undeliveredMaps) =>
       # The error code varies here, depending on some timing parameters & browser.
       # These will probably be undefined, but == will catch that.
-      test.strictEqual @socket.readyState, @socket.CLOSED
-      test.equal pendingMaps, null
-      test.equal undeliveredMaps, null
-      test.expect 6
-      test.done()
+      assert.strictEqual @socket.readyState, @socket.CLOSED
+      assert.equal pendingMaps, null
+      assert.equal undeliveredMaps, null
+      assert.ok onErrorCalled
+      done()
 
-  'The client keeps reconnecting': do ->
-    m = (base) -> (test) ->
+  suite 'The client keeps reconnecting', ->
+    m = (base) -> (done) ->
       @socket = new BCSocket base, failFast: yes, reconnect: yes, reconnectTime: 300
       
       openCount = 0
@@ -189,59 +201,64 @@ module.exports = nodeunit.testCase
       @socket.onopen = =>
         throw new Error 'Should not keep trying to open once the test is done' if openCount == 2
 
-        test.strictEqual @socket.readyState, @socket.OPEN
+        assert.strictEqual @socket.readyState, @socket.OPEN
 
       @socket.onclose = (reason, pendingMaps, undeliveredMaps) =>
-        test.strictEqual @socket.readyState, @socket.CLOSED
+        assert.strictEqual @socket.readyState, @socket.CLOSED
 
         openCount++
         if openCount is 2
           # Tell the socket to stop trying to connect
           @socket.close()
-          test.done()
+          done()
 
-    'When the connection fails': m('dc1')
+    test 'When the connection fails', m('dc1')
 #    'When the connection dies': m('dc3')
 
-  'stop': do ->
-    makeTest = (base) -> (test) ->
+  suite 'stop', ->
+    makeTest = (base) -> (done) ->
       # We don't need failFast for stop.
       @socket = new BCSocket base
 
+      onErrorCalled = no
       @socket.onerror = (message, errCode) =>
-        test.strictEqual @socket.readyState, @socket.CLOSING
-        test.strictEqual message, 'Stopped by server'
-        test.strictEqual errCode, 7
+        assert.strictEqual @socket.readyState, @socket.CLOSING
+        assert.strictEqual message, 'Stopped by server'
+        assert.strictEqual errCode, 7
+        onErrorCalled = yes
 
       @socket.onclose = (reason, pendingMaps, undeliveredMaps) =>
         # These will probably be undefined, but == will catch that.
-        test.strictEqual @socket.readyState, @socket.CLOSED
-        test.equal pendingMaps, null
-        test.equal undeliveredMaps, null
-        test.strictEqual reason, 'Stopped by server'
-        test.expect 7
-        test.done()
+        assert.strictEqual @socket.readyState, @socket.CLOSED
+        assert.equal pendingMaps, null
+        assert.equal undeliveredMaps, null
+        assert.strictEqual reason, 'Stopped by server'
+        assert.ok onErrorCalled
+        done()
 
-    'on connect': makeTest 'stop1'
-    'after connect': makeTest 'stop2'
+    test 'on connect', makeTest 'stop1'
+    test 'after connect', makeTest 'stop2'
 
-  # This is a little stress test to make sure I haven't missed anything. Sending and recieving this much data
-  # pushes the client to use multiple forward channel connections. It doesn't use multiple backchannel connections -
-  # I should probably put some logic there whereby I close the backchannel after awhile.
-  'Send & receive lots of data': (test) ->
+  # This is a little stress test to make sure I haven't missed anything.
+  # Sending and recieving this much data pushes the client to use multiple
+  # forward channel connections. It doesn't use multiple backchannel
+  # connections - I should probably put some logic there whereby I close the
+  # backchannel after awhile.
+  test 'Send & receive lots of data', (done) ->
     num = 5000
 
     @socket = new BCSocket '/echomap'
 
     received = 0
     @socket.onmessage = (message) ->
-      test.equal message.data, received
+      assert.equal message.data, received
       received++
 
-      test.done() if received == num
+      done() if received == num
 
-    process.nextTick =>
+    setTimeout =>
       # Maps aren't actual JSON. They're just key-value pairs. I don't need to encode i as a string here,
       # but thats now its sent anyway.
       @socket.sendMap {data:"#{i}", juuuuuuuuuuuuuuuuunnnnnnnnnk:'waaaazzzzzzuuuuuppppppp'} for i in [0...num]
+    , 0
 
