@@ -25,6 +25,11 @@
 #   - **reconnect**: Tell the socket to automatically reconnect when its been disconnected.
 #   - **failFast**: Make the socket report errors immediately, rather than trying a few times
 #     first.
+#   - **crossDomainXhr**: Set to true to enable the cross-origin credential
+#     flags in XHR requests. The server must send the
+#     Access-Control-Allow-Credentials header and can't use wildcard access
+#     control hostnames. See:
+#       http://www.html5rocks.com/en/tutorials/cors/#toc-withcredentials
 
 goog.provide 'bc.BCSocket'
 
