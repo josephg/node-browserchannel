@@ -74,7 +74,7 @@ socket.onmessage = function(message) {
   console.log('got message', message);
 };
 
-# later...
+// later...
 socket.close()
 ```
 
