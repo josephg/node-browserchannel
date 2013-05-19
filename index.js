@@ -1,5 +1,4 @@
-require('coffee-script');
-exports.server = require('./lib/server');
+exports.server = require('./dist/server');
 
 // This exposes the bare browserchannel implementation.
 //exports.goog = require('./dist/node-browserchannel.js');

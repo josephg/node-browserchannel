@@ -2597,7 +2597,7 @@ $ = function(a, b) {
     try {
       return"function" === typeof y[b] ? y[b].apply(y, a) : h
     }catch(c) {
-      "undefined" !== typeof console && console !== m && console.error(c.stack), e(c)
+      a = c, "undefined" !== typeof console && console !== m && console.error(a.stack), e(a)
     }
   };
   d = new he;

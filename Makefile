@@ -35,7 +35,7 @@ PRETTY_PRINT = --compiler_flags=--formatting=PRETTY_PRINT
 COFFEE = ./node_modules/.bin/coffee
 MOCHA = ./node_modules/.bin/mocha
 
-all: dist/bcsocket.js dist/node-bcsocket.js dist/bcsocket-uncompressed.js dist/node-bcsocket-uncompressed.js
+all: dist/bcsocket.js dist/node-bcsocket.js dist/bcsocket-uncompressed.js dist/node-bcsocket-uncompressed.js dist/server.js
 
 clean:
 	rm -rf tmp
@@ -50,6 +50,10 @@ dist/%.js: tmp/compiled-%.js
 	echo '(function(){' > $@
 	cat $+ >> $@
 	echo "})();" >> $@
+
+# The server should be in dist/ too, but we don't need to compile that with closure.
+dist/server.js: lib/server.coffee
+	coffee -bco dist $<
 
 tmp/compiled-bcsocket.js: tmp/bcsocket.js tmp/browserchannel.js
 	$(CLOSURE_BUILDER) $(CLOSURE_CFLAGS) > $@

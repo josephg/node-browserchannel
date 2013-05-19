@@ -11,16 +11,17 @@
   "main": "index.js",
   "engine": "node >= 0.6.2",
   "scripts": {
-    "test": "mocha"
+    "test": "mocha",
+    "prepublish": "make"
   },
   "dependencies": {
-    "coffee-script": "~1",
     "hat": "*",
     "connect": "~2",
-    "timerstub": "*",
     "request": "~2"
   },
   "devDependencies": {
+    "coffee-script": "~1",
+    "timerstub": "*",
     "mocha": "*"
   }
 }
