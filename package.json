@@ -12,7 +12,7 @@
   "engine": "node >= 0.6.2",
   "scripts": {
     "test": "mocha",
-    "prepublish": "make"
+    "prepublish": "make dist/server.js"
   },
   "dependencies": {
     "hat": "*",

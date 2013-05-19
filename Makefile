@@ -9,9 +9,9 @@
 #
 # http://code.google.com/p/closure-compiler/downloads/list
 #
-# I also compile with this patch to the closure library:
-# http://code.google.com/p/closure-library/issues/detail?id=388&sort=-id
-# ... which fixes a couple timing issues in nodejs.
+# I also compile with a patch to the closure library (which is in the root of
+# this repo). The patch fixes some cleanup issues in the closure library to
+# make sure everything gets cleaned up properly when connections close.
 
 .PHONY: clean, all, test
 
@@ -35,7 +35,7 @@ PRETTY_PRINT = --compiler_flags=--formatting=PRETTY_PRINT
 COFFEE = ./node_modules/.bin/coffee
 MOCHA = ./node_modules/.bin/mocha
 
-all: dist/bcsocket.js dist/node-bcsocket.js dist/bcsocket-uncompressed.js dist/node-bcsocket-uncompressed.js dist/server.js
+all: dist/server.js dist/bcsocket.js dist/node-bcsocket.js dist/bcsocket-uncompressed.js dist/node-bcsocket-uncompressed.js
 
 clean:
 	rm -rf tmp
