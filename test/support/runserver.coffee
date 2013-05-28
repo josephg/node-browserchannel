@@ -7,14 +7,14 @@ browserChannel = require('../..').server
 coffee = require 'coffee-script'
 
 server = connect(
-  connect.static "#{__dirname}/web"
-  connect.static "#{__dirname}/../node_modules/mocha" # for mocha.js, mocha.css
+  connect.static "#{__dirname}/../web"
+  connect.static "#{__dirname}/../../node_modules/mocha" # for mocha.js, mocha.css
   #connect.logger 'dev'
 
   # Compile and host the tests.
   (req, res, next) ->
     return next() unless req.url is '/tests.js'
-    f = fs.readFileSync require.resolve('./bcsocket'), 'utf8'
+    f = fs.readFileSync require.resolve('../bcsocket'), 'utf8'
     f = "require = (m) -> window[m]\n" + f
     res.setHeader 'Content-Type', 'application/javascript'
     res.end coffee.compile f
