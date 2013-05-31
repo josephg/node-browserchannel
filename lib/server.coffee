@@ -45,50 +45,53 @@ randomArrayElement = (array) -> array[randomInt(array.length)]
 
 # The module is configurable
 defaultOptions =
-  # An optional array of host prefixes. Each browserchannel client will randomly pick
-  # from the list of host prefixes when it connects. This reduces the impact of per-host
-  # connection limits.
+  # An optional array of host prefixes. Each browserchannel client will
+  # randomly pick from the list of host prefixes when it connects. This reduces
+  # the impact of per-host connection limits.
   #
-  # All host prefixes should point to the same server. Ie, if your server's hostname
-  # is *example.com* and your hostPrefixes contains ['a', 'b', 'c'],
-  # a.example.com, b.example.com and c.example.com should all point to the same host
-  # as example.com.
+  # All host prefixes should point to the same server. Ie, if your server's
+  # hostname is *example.com* and your hostPrefixes contains ['a', 'b', 'c'],
+  # a.example.com, b.example.com and c.example.com should all point to the same
+  # host as example.com.
   hostPrefixes: null
 
-  # You can specify the base URL which browserchannel connects to. Change this if you want
-  # to scope browserchannel in part of your app, or if you want /channel to mean something
-  # else, or whatever.
+  # You can specify the base URL which browserchannel connects to. Change this
+  # if you want to scope browserchannel in part of your app, or if you want
+  # /channel to mean something else, or whatever.
   base: '/channel'
 
-  # We'll send keepalives every so often to make sure the http connection isn't closed by
-  # eagar clients. The standard timeout is 30 seconds, so we'll default to sending them
-  # every 20 seconds or so.
+  # We'll send keepalives every so often to make sure the http connection isn't
+  # closed by eagar clients. The standard timeout is 30 seconds, so we'll
+  # default to sending them every 20 seconds or so.
   keepAliveInterval: 20 * 1000
 
-  # After awhile (30 seconds or so) of not having a backchannel connected, we'll evict the
-  # session completely. This will happen whenever a user closes their browser.
+  # After awhile (30 seconds or so) of not having a backchannel connected,
+  # we'll evict the session completely. This will happen whenever a user closes
+  # their browser.
   sessionTimeoutInterval: 30 * 1000
 
-  # By default, browsers don't allow access via javascript to foreign sites. You can use the
-  # cors: option to set the Access-Control-Allow-Origin header in responses, which tells browsers
-  # whether or not to allow cross domain requests to be sent.
+  # By default, browsers don't allow access via javascript to foreign sites.
+  # You can use the cors: option to set the Access-Control-Allow-Origin header
+  # in responses, which tells browsers whether or not to allow cross domain
+  # requests to be sent.
   #
   # See https://developer.mozilla.org/en/http_access_control for more information.
   #
-  # Setting cors:'*' will enable javascript from any domain to access your application. BE CAREFUL!
-  # If your application uses cookies to manage user sessions, javascript on a foreign site could
-  # make requests as if it were acting on behalf of one of your users.
+  # Setting cors:'*' will enable javascript from any domain to access your
+  # application. BE CAREFUL!  If your application uses cookies to manage user
+  # sessions, javascript on a foreign site could make requests as if it were
+  # acting on behalf of one of your users.
   cors: null
 
-  # A user can override all the headers if they want by setting the headers option to an object.
+  # A user can override all the headers if they want by setting the headers
+  # option to an object.
   headers: null
 
-# All server responses set some standard HTTP headers.
-# To be honest, I don't know how many of these are necessary. I just copied
-# them from google.
+# All server responses set some standard HTTP headers. To be honest, I don't
+# know how many of these are necessary. I just copied them from google.
 #
-# The nocache headers in particular seem unnecessary since each client
-# request includes a randomized `zx=junk` query parameter.
+# The nocache headers in particular seem unnecessary since each client request
+# includes a randomized `zx=junk` query parameter.
 standardHeaders =
   'Content-Type': 'text/plain'
   'Cache-Control': 'no-cache, no-store, max-age=0, must-revalidate'
@@ -99,35 +102,36 @@ standardHeaders =
   # Gmail also sends this, though I'm not really sure what it does...
 #  'X-Xss-Protection': '1; mode=block'
 
-# The one exception to that is requests destined for iframes. They need to
-# have content-type: text/html set for IE to process the juicy JS inside.
+# The one exception to that is requests destined for iframes. They need to have
+# content-type: text/html set for IE to process the juicy JS inside.
 ieHeaders = {}
 ieHeaders[k] = v for k, v of standardHeaders
 ieHeaders['Content-Type'] = 'text/html'
 
-# Google's browserchannel server adds some junk after the first message data is sent. I
-# assume this stops some whole-page buffering in IE. I assume the data used is noise so it
-# doesn't compress.
+# Google's browserchannel server adds some junk after the first message data is
+# sent. I assume this stops some whole-page buffering in IE. I assume the data
+# used is noise so it doesn't compress.
 #
-# I don't really know why google does this. I'm assuming there's a good reason to it though.
+# I don't really know why google does this. I'm assuming there's a good reason
+# to it though.
 ieJunk = "7cca69475363026330a0d99468e88d23ce95e222591126443015f5f462d9a177186c8701fb45a6ffe
 e0daf1a178fc0f58cd309308fba7e6f011ac38c9cdd4580760f1d4560a84d5ca0355ecbbed2ab715a3350fe0c47
 9050640bd0e77acec90c58c4d3dd0f5cf8d4510e68c8b12e087bd88cad349aafd2ab16b07b0b1b8276091217a44
 a9fe92fedacffff48092ee693af\n"
 
-# If the user is using IE, instead of using XHR backchannel loaded using
-# a forever iframe. When data is sent, it is wrapped in <script></script> tags
+# If the user is using IE, instead of using XHR backchannel loaded using a
+# forever iframe. When data is sent, it is wrapped in <script></script> tags
 # which call functions in the browserchannel library.
 #
-# This method wraps the normal `.writeHead()`, `.write()` and `.end()` methods by
-# special versions which produce output based on the request's type.
+# This method wraps the normal `.writeHead()`, `.write()` and `.end()` methods
+# by special versions which produce output based on the request's type.
 #
 # This **is not used** for:
 #
 # - The first channel test
-# - The first *bind* connection a client makes. The server sends arrays there, but the
-#   connection is a POST and it returns immediately. So that request happens using XHR/Trident
-#   like regular forward channel requests.
+# - The first *bind* connection a client makes. The server sends arrays there,
+#   but the connection is a POST and it returns immediately. So that request
+#   happens using XHR/Trident like regular forward channel requests.
 messagingMethods = (options, query, res) ->
   type = query.TYPE
   if type == 'html'
@@ -323,15 +327,16 @@ order = (start, playOld) ->
         base++
         callback()
 
-# We need access to the client's sourcecode. I'm going to get it using a synchronous file call
-# (it'll be fast anyway, and only happen once).
+# We need access to the client's sourcecode. I'm going to get it using a
+# synchronous file call (it'll be fast anyway, and only happen once).
 #
-# I'm also going to set an etag on the client data so the browser client will be cached. I'm kind of
-# uncomfortable about adding complexity here because its not like this code hasn't been written
-# before, but.. I think a lot of people will use this API.
+# I'm also going to set an etag on the client data so the browser client will
+# be cached. I'm kind of uncomfortable about adding complexity here because its
+# not like this code hasn't been written before, but.. I think a lot of people
+# will use this API.
 #
-# I should probably look into hosting the client code as a javascript module using that client-side
-# npm thing.
+# I should probably look into hosting the client code as a javascript module
+# using that client-side npm thing.
 clientFile = "#{__dirname}/../dist/bcsocket.js"
 clientStats = fs.statSync clientFile
 try
