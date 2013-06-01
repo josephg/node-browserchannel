@@ -143,11 +143,13 @@ messagingMethods = (options, query, res) ->
         res.write '<html><body>'
 
         domain = query.DOMAIN
-        # If the iframe is making the request using a secondary domain, I think we need
-        # to set the `domain` to the original domain so that we can call the response methods.
+        # If the iframe is making the request using a secondary domain, I think
+        # we need to set the `domain` to the original domain so that we can
+        # call the response methods.
         if domain and domain != ''
-          # Make sure the domain doesn't contain anything by naughty by `JSON.stringify()`-ing
-          # it before passing it to the client. There are XSS vulnerabilities otherwise.
+          # Make sure the domain doesn't contain anything by naughty by
+          # `JSON.stringify()`-ing it before passing it to the client. There
+          # are XSS vulnerabilities otherwise.
           res.write "<script>try{document.domain=#{JSON.stringify domain};}catch(e){}</script>\n"
     
       write: (data) ->
@@ -158,22 +160,24 @@ messagingMethods = (options, query, res) ->
           junkSent = true
 
       end: ->
-        # Once the data has been received, the client needs to call `d()`, which is bound to
-        # *onTridentDone_* with success=*true*.
-        # The weird spacing of this is copied from browserchannel. Its really not necessary.
+        # Once the data has been received, the client needs to call `d()`,
+        # which is bound to *onTridentDone_* with success=*true*.  The weird
+        # spacing of this is copied from browserchannel. Its really not
+        # necessary.
         res.end "<script>try  {parent.d(); }catch (e){}</script>\n"
 
       # This is a helper method for signalling an error in the request back to the client.
       writeError: (statusCode, message) ->
-        # The HTML (iframe) handler has no way to discover that the embedded script tag
-        # didn't complete successfully. To signal errors, we return **200 OK** and call an
-        # exposed rpcClose() method on the page.
+        # The HTML (iframe) handler has no way to discover that the embedded
+        # script tag didn't complete successfully. To signal errors, we return
+        # **200 OK** and call an exposed rpcClose() method on the page.
         methods.writeHead()
         res.end "<script>try {parent.rpcClose(#{JSON.stringify message})} catch(e){}</script>\n"
 
-    # For some reason, sending data during the second test (111112) works slightly differently for
-    # XHR, but its identical for html encoding. We'll use a writeRaw() method in that case, which
-    # is copied in the case of html.
+    # For some reason, sending data during the second test (111112) works
+    # slightly differently for XHR, but its identical for html encoding. We'll
+    # use a writeRaw() method in that case, which is copied in the case of
+    # html.
     methods.writeRaw = methods.write
 
     methods
@@ -190,8 +194,8 @@ messagingMethods = (options, query, res) ->
 
 # For telling the client its done bad.
 #
-# It turns out google's server isn't particularly fussy about signalling errors using the proper
-# html RPC stuff, so this is useful for html connections too.
+# It turns out google's server isn't particularly fussy about signalling errors
+# using the proper html RPC stuff, so this is useful for html connections too.
 sendError = (res, statusCode, message) ->
   res.writeHead statusCode, message
   res.end "<html><body><h1>#{message}</h1></body></html>"
@@ -199,7 +203,8 @@ sendError = (res, statusCode, message) ->
 
 # ## Parsing client maps from the forward channel
 #
-# The client sends data in a series of url-encoded maps. The data is encoded like this:
+# The client sends data in a series of url-encoded maps. The data is encoded
+# like this:
 # 
 # ```
 # count=2&ofs=0&req0_x=3&req0_y=10&req1_abc=def
@@ -302,18 +307,18 @@ decodeData = (req, data) ->
 # inOrder 1, -> console.log 'second'
 # inOrder 0, -> console.log 'first'
 #
-# Start is the ID of the first element we expect to receive. If we get data for earlier
-# elements, we'll play them anyway if playOld is truthy.
+# Start is the ID of the first element we expect to receive. If we get data for
+# earlier elements, we'll play them anyway if playOld is truthy.
 order = (start, playOld) ->
   # Base is the ID of the (missing) element at the start of the queue
   base = start
-  # The queue will start with about 10 elements. Elements of the queue are undefined
-  # if we don't have data for that queue element.
+  # The queue will start with about 10 elements. Elements of the queue are
+  # undefined if we don't have data for that queue element.
   queue = new Array 10
 
   (seq, callback) ->
-    # Its important that all the cells of the array are truthy if we have data. We'll use an
-    # empty function instead of null.
+    # Its important that all the cells of the array are truthy if we have data.
+    # We'll use an empty function instead of null.
     callback or= ->
 
     # Ignore old messages, or play them back immediately if playOld=true
@@ -346,11 +351,12 @@ catch e
   throw e
 
 
-  # This is mostly to help development, but if the client is recompiled, I'll pull in a new version.
-  # This isn't tested by the unit tests - but its not a big deal.
-  #
-  # The `readFileSync` call here will stop the whole server while the client is reloaded.
-  # This will only happen during development so its not a big deal.
+# This is mostly to help development, but if the client is recompiled, I'll
+# pull in a new version.  This isn't tested by the unit tests - but its not a
+# big deal.
+#
+# The `readFileSync` call here will stop the whole server while the client is
+# reloaded.  This will only happen during development so its not a big deal.
 if process.env.NODE_ENV != 'production'
   if process.platform is "win32"
     # Windows doesn't support watchFile. See:
@@ -371,8 +377,9 @@ if process.env.NODE_ENV != 'production'
 #
 # # The server middleware
 #
-# The server module returns a function, which you can call with your configuration
-# options. It returns your configured connect middleware, which is actually another function.
+# The server module returns a function, which you can call with your
+# configuration options. It returns your configured connect middleware, which
+# is actually another function.
 module.exports = browserChannel = (options, onConnect) ->
   if typeof onConnect == 'undefined'
     onConnect = options
@@ -410,13 +417,14 @@ module.exports = browserChannel = (options, onConnect) ->
   # Session ids are generated by [node-hat]. They are guaranteed to be unique.
   # [node-hat]: https://github.com/substack/node-hat
   #
-  # This method is synchronous, because a database will never be involved in browserchannel
-  # session management. Browserchannel sessions only last as long as the user's browser
-  # is open. If there's any connection turbulence, the client will reconnect and get
-  # a new session id.
+  # This method is synchronous, because a database will never be involved in
+  # browserchannel session management. Browserchannel sessions only last as
+  # long as the user's browser is open. If there's any connection turbulence,
+  # the client will reconnect and get a new session id.
   #
-  # Sometimes a client will specify an old session ID and old array ID. In this case, the client
-  # is reconnecting and we should evict the named session (if it exists).
+  # Sometimes a client will specify an old session ID and old array ID. In this
+  # case, the client is reconnecting and we should evict the named session (if
+  # it exists).
   createSession = (address, query, headers) ->
     {RID:initialRid, CVER:appVersion, OSID:oldSessionId, OAID:oldArrayId} = query
 
@@ -424,37 +432,39 @@ module.exports = browserChannel = (options, onConnect) ->
       oldSession._acknowledgeArrays oldArrayId
       oldSession.close 'Reconnected'
 
-    # Create a new session. Sessions extend node's [EventEmitter][] so they have access to
-    # goodies like `session.on(event, handler)`, `session.emit('paarty')`, etc.
+    # Create a new session. Sessions extend node's [EventEmitter][] so they
+    # have access to goodies like `session.on(event, handler)`,
+    # `session.emit('paarty')`, etc.
     # [EventEmitter]: http://nodejs.org/docs/v0.4.12/api/events.html
     session = new EventEmitter
 
     # The session's unique ID for this connection
     session.id = hat()
 
-    # The client stores its IP address and headers from when it first opened the session. The
-    # handler can use this information for authentication or something.
+    # The client stores its IP address and headers from when it first opened
+    # the session. The handler can use this information for authentication or
+    # something.
     session.address = address
     session.headers = headers
 
     # The session is a little state machine. It has the following states:
     #
-    # - **init**: The session has been created and its sessionId hasn't been sent yet.
-    #   The session moves to the **ok** state when the first data chunk is sent to the
-    #   client.
+    # - **init**: The session has been created and its sessionId hasn't been
+    #   sent yet.  The session moves to the **ok** state when the first data
+    #   chunk is sent to the client.
     #
-    # - **ok**: The session is sitting pretty and ready to send and receive data.
-    #   The session will spend most of its time in this state.
+    # - **ok**: The session is sitting pretty and ready to send and receive
+    #   data. The session will spend most of its time in this state.
     #
-    # - **closed**: The session has been removed from the session list. It can no longer
-    #   be used for any reason.
+    # - **closed**: The session has been removed from the session list. It can
+    #   no longer be used for any reason.
     #
     #   It is invalid to send arrays to a session while it is closed. Unless you're
     #   Bruce Willis...
     session.state = 'init'
 
-    # The state is modified through this method. It emits events when the state changes.
-    # (yay)
+    # The state is modified through this method. It emits events when the state
+    # changes. (yay)
     changeState = (newState) ->
       oldState = session.state
       session.state = newState
@@ -972,21 +982,24 @@ module.exports = browserChannel = (options, onConnect) ->
           catch e
             return dataError e
           if session.state is 'init'
-            # The initial forward channel request is also used as a backchannel for the server's
-            # initial data (session id, etc). This connection is a little bit special - it is always
-            # encoded using length-prefixed json encoding and it is closed as soon as the first chunk is
-            # sent.
+            # The initial forward channel request is also used as a backchannel
+            # for the server's initial data (session id, etc). This connection
+            # is a little bit special - it is always encoded using
+            # length-prefixed json encoding and it is closed as soon as the
+            # first chunk is sent.
             res.writeHead 200, 'OK', options.headers
             session._setBackChannel res, CI:1, TYPE:'xmlhttp', RID:'rpc'
             session.flush()
           else if session.state is 'closed'
-            # If the onConnect handler called close() immediately, session.state can be already closed at this point.
-            # I'll assume there was an authentication problem and treat this as a forbidden connection attempt.
+            # If the onConnect handler called close() immediately,
+            # session.state can be already closed at this point.  I'll assume
+            # there was an authentication problem and treat this as a forbidden
+            # connection attempt.
             sendError res, 403, 'Forbidden'
           else
-            # On normal forward channels, we reply to the request by telling the session
-            # if our backchannel is still live and telling it how many unconfirmed
-            # arrays we have.
+            # On normal forward channels, we reply to the request by telling
+            # the session if our backchannel is still live and telling it how
+            # many unconfirmed arrays we have.
             response = JSON.stringify session._backChannelStatus()
             res.writeHead 200, 'OK', options.headers
             res.end "#{response.length}\n#{response}"
@@ -1004,8 +1017,8 @@ module.exports = browserChannel = (options, onConnect) ->
       else if req.method is 'GET'
         # ### Back channel
         #
-        # GET messages are usually backchannel requests (server->client). Backchannel messages are handled
-        # by the session object.
+        # GET messages are usually backchannel requests (server->client).
+        # Backchannel messages are handled by the session object.
         if query.TYPE in ['xmlhttp', 'html']
           return sendError res, 400, 'Invalid SID' if typeof query.SID != 'string' && query.SID.length < 5
           return sendError res, 400, 'Expected RPC' unless query.RID is 'rpc'
@@ -1032,13 +1045,14 @@ module.exports = browserChannel = (options, onConnect) ->
 
   middleware.close = -> session.close() for id, session of sessions
 
-  # This is an undocumented, untested treat - if you pass the HTTP server / connect server to
-  # browserchannel through the options object, it can attach a close listener for you automatically.
+  # This is an undocumented, untested treat - if you pass the HTTP server /
+  # connect server to browserchannel through the options object, it can attach
+  # a close listener for you automatically.
   options.server?.on 'close', middleware.close
 
   middleware
 
-# This will override the timer methods (`setInterval`, etc) with the testing stub versions,
-# which are way faster.
+# This will override the timer methods (`setInterval`, etc) with the testing
+# stub versions, which are way faster.
 browserChannel._setTimerMethods = (methods) ->
   {setInterval, clearInterval, setTimeout, clearTimeout, Date} = methods
