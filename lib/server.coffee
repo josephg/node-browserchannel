@@ -954,7 +954,9 @@ module.exports = browserChannel = (options, onConnect) ->
           # The session is new! Make them a new session object and let the
           # application know.
           session = createSession req.connection.remoteAddress, query, req.headers
-          onConnect? session
+          onConnect? session, req
+          # TODO Emit 'req' for subsequent requests associated with session
+          session.emit 'req', req
 
         dataError = (e) ->
           console.warn 'Error parsing forward channel', e.stack
