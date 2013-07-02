@@ -62,8 +62,8 @@ tmp/compiled-node-bcsocket.js: tmp/bcsocket.js tmp/nodejs-override.js tmp/browse
 	$(CLOSURE_BUILDER) $(CLOSURE_CFLAGS) --namespace=bc.node > $@
 
 tmp/compiled-bcsocket-uncompressed.js: tmp/bcsocket.js tmp/browserchannel.js
-	$(CLOSURE_BUILDER) $(CLOSURE_CFLAGS) --compiler_flags=--formatting=PRETTY_PRINT > $@
+	$(CLOSURE_BUILDER) $(CLOSURE_CFLAGS) --compiler_flags=--formatting=PRETTY_PRINT --output_mode=script > $@
 
 tmp/compiled-node-bcsocket-uncompressed.js: tmp/bcsocket.js tmp/nodejs-override.js tmp/browserchannel.js
-	$(CLOSURE_BUILDER) $(CLOSURE_CFLAGS) --compiler_flags=--formatting=PRETTY_PRINT --namespace=bc.node > $@
+	$(CLOSURE_BUILDER) $(CLOSURE_CFLAGS) --compiler_flags=--formatting=PRETTY_PRINT --output_mode=script --namespace=bc.node > $@
 
