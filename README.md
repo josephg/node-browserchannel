@@ -178,13 +178,14 @@ unzip compiler-latest.zip compiler.jar
 3. Patch the library
 
 ```
-patch -p0 <../node-browserchannel/closure-*.patch
+cd closure/
+patch -p0 < ../../node-browserchannel/closure-*.patch
 ```
 
 4. Build
 
 ```
-cd ../node-browserchannel
+cd ../../node-browserchannel
 make
 ```
 
