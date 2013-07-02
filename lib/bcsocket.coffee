@@ -30,6 +30,10 @@
 #     Access-Control-Allow-Credentials header and can't use wildcard access
 #     control hostnames. See:
 #       http://www.html5rocks.com/en/tutorials/cors/#toc-withcredentials
+#   - **extraParams**: Extra query parameters to be sent with requests. If
+#     present, this should be a map of query parameter / value pairs. Note that
+#     these parameters are resent with every request, so you might want to think
+#     twice before putting a lot of stuff in here.
 
 goog.provide 'bc.BCSocket'
 
@@ -223,7 +227,7 @@ BCSocket = (url, options) ->
     # Only needed for debugging..
     #session.setChannelDebug(new goog.net.ChannelDebug())
 
-    session.connect "#{url}/test", "#{url}/bind", null,
+    session.connect "#{url}/test", "#{url}/bind", options.extraParams,
       lastSession?.getSessionId(), lastSession?.getLastArrayId()
 
   # This isn't in the normal websocket interface. It reopens a previously closed websocket
