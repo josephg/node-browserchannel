@@ -265,3 +265,5 @@ suite 'bcsocket', ->
       @socket.sendMap {data:"#{i}", juuuuuuuuuuuuuuuuunnnnnnnnnk:'waaaazzzzzzuuuuuppppppp'} for i in [0...num]
     , 0
 
+  # Write me!
+  test 'extraParams are passed to the server'
