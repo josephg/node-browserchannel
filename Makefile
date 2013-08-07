@@ -53,7 +53,7 @@ dist/%.js: tmp/compiled-%.js
 
 # The server should be in dist/ too, but we don't need to compile that with closure.
 dist/server.js: lib/server.coffee
-	coffee -bco dist $<
+	$(COFFEE) -bco dist $<
 
 tmp/compiled-bcsocket.js: tmp/bcsocket.js tmp/browserchannel.js
 	$(CLOSURE_BUILDER) $(CLOSURE_CFLAGS) > $@
