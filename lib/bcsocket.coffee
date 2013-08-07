@@ -227,7 +227,7 @@ BCSocket = (url, options) ->
     # Only needed for debugging..
     #session.setChannelDebug(new goog.net.ChannelDebug())
 
-    session.connect "#{url}/test", "#{url}/bind", options.extraParams,
+    session.connect "#{url}/test", "#{url}/bind", options['extraParams'],
       lastSession?.getSessionId(), lastSession?.getLastArrayId()
 
   # This isn't in the normal websocket interface. It reopens a previously closed websocket
