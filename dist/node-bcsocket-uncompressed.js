@@ -197,7 +197,7 @@ function Oa(a, b) {
   b.unshift(a);
   Na.call(this, ma.apply(null, b));
   b.shift();
-  this.Lc = a
+  this.Kc = a
 }
 y(Oa, Na);
 Oa.prototype.name = "AssertionError";
@@ -1593,10 +1593,10 @@ Vc.prototype.Bb = null;
 var Wc = 0;
 Vc.prototype.reset = function(a, b, c, d, f) {
   this.Dc = "number" == typeof f ? f : Wc++;
-  this.Sc = d || x();
+  this.Rc = d || x();
   this.za = a;
   this.pc = b;
-  this.Kc = c;
+  this.Jc = c;
   delete this.Cb;
   delete this.Bb
 };
@@ -1655,7 +1655,7 @@ p.lc = function(a, b, c) {
       }else {
         var k, t, l = !1;
         try {
-          k = c.lineNumber || c.Jc || "Not available"
+          k = c.lineNumber || c.Ic || "Not available"
         }catch(r) {
           k = "Not available", l = !0
         }
@@ -1751,7 +1751,7 @@ function Fc(a, b) {
   }
 }
 ;function hd(a, b) {
-  this.Qc = new Nc(a);
+  this.Pc = new Nc(a);
   this.P = b ? Kc : Jc
 }
 hd.prototype.parse = function(a) {
@@ -2180,20 +2180,20 @@ p.ha = 8;
 var Kd = 1, Md = new Tb;
 function Nd(a, b) {
   M.call(this, "statevent", a);
-  this.Rc = b
+  this.Qc = b
 }
 y(Nd, M);
 function Od(a, b, c, d) {
   M.call(this, "timingevent", a);
   this.size = b;
-  this.Pc = c;
-  this.Oc = d
+  this.Oc = c;
+  this.Nc = d
 }
 y(Od, M);
 var kc = 1, qc = 2, pc = 3, Gc = 4;
 function Pd(a, b) {
   M.call(this, "serverreachability", a);
-  this.Nc = b
+  this.Mc = b
 }
 y(Pd, M);
 var td = 3, xd = 4, zd = 5, Cd = 6, Bd = 7, Fd = 8, Gd = 9, Hd = 10, Id = 11, Dd = 12, vc = 13, wc = 14, Ac = 15, Bc = 16, Cc = 17, Ic = 18, Ec = 22, gd = "y2f%";
@@ -2618,7 +2618,7 @@ $ = function(a, b) {
   };
   r(this.CLOSED);
   l = null;
-  g = b.Mc;
+  g = b.Lc;
   c = function() {
     var a, b;
     b = arguments[0];
@@ -2680,7 +2680,7 @@ $ = function(a, b) {
       h.a.info("setFailFast: true");
       (h.o || h.F) && h.V > (h.Ka ? 0 : h.kb) && (h.a.info("Retry count " + h.V + " > new maxRetries " + (h.Ka ? 0 : h.kb) + ". Fail immediately!"), h.o ? (h.o.cancel(), h.ma(h.o)) : (q.clearTimeout(h.F), h.F = null, Z(h, 2)))
     }
-    return l.hb("" + a + "/test", "" + a + "/bind", b.Ic, null != g ? g.Z : void 0, null != g ? g.ya : void 0)
+    return l.hb("" + a + "/test", "" + a + "/bind", b.extraParams, null != g ? g.Z : void 0, null != g ? g.ya : void 0)
   };
   this.open = function() {
     if(t.readyState !== t.CLOSED) {

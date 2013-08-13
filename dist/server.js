@@ -290,6 +290,7 @@ module.exports = browserChannel = function(options, onConnect) {
     session.address = address;
     session.headers = headers;
     session.state = 'init';
+    session.query = query;
     changeState = function(newState) {
       var oldState;
 
