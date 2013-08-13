@@ -463,6 +463,10 @@ module.exports = browserChannel = (options, onConnect) ->
     #   Bruce Willis...
     session.state = 'init'
 
+    # Add a reference to the query as users can send extra query string
+    # information using the `extraParams` option on the Socket.
+    session.query = query
+
     # The state is modified through this method. It emits events when the state
     # changes. (yay)
     changeState = (newState) ->
