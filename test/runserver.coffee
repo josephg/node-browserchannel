@@ -7,7 +7,7 @@ connect = require 'connect'
 browserChannel = require('..').server
 coffee = require 'coffee-script'
 
-server = connect(
+server = module.exports = connect(
   connect.static "#{__dirname}/web"
   connect.static "#{__dirname}/../node_modules/mocha" # for mocha.js, mocha.css
   #connect.logger 'dev'
