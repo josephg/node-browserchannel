@@ -1,20 +1,21 @@
+#!/usr/bin/env coffee
 # This file hosts a web server which exposes a bunch of browserchannel clients
 # which respond in different ways to requests.
 
 fs = require 'fs'
 connect = require 'connect'
-browserChannel = require('../..').server
+browserChannel = require('..').server
 coffee = require 'coffee-script'
 
 server = connect(
-  connect.static "#{__dirname}/../web"
-  connect.static "#{__dirname}/../../node_modules/mocha" # for mocha.js, mocha.css
+  connect.static "#{__dirname}/web"
+  connect.static "#{__dirname}/../node_modules/mocha" # for mocha.js, mocha.css
   #connect.logger 'dev'
 
   # Compile and host the tests.
   (req, res, next) ->
     return next() unless req.url is '/tests.js'
-    f = fs.readFileSync require.resolve('../bcsocket'), 'utf8'
+    f = fs.readFileSync require.resolve('./bcsocket'), 'utf8'
     f = "require = (m) -> window[m]\n" + f
     res.setHeader 'Content-Type', 'application/javascript'
     res.end coffee.compile f
@@ -55,5 +56,6 @@ server = connect(
       session.stop()
 )
 
-server.listen 4321
-console.log 'Point your browser at http://localhost:4321/'
+if require.main == module
+  server.listen 4321
+  console.log 'Point your browser at http://localhost:4321/'
