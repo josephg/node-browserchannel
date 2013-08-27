@@ -196,8 +196,8 @@ messagingMethods = (options, query, res) ->
 #
 # It turns out google's server isn't particularly fussy about signalling errors
 # using the proper html RPC stuff, so this is useful for html connections too.
-sendError = (res, statusCode, message) ->
-  res.writeHead statusCode, message
+sendError = (res, statusCode, message, options) ->
+  res.writeHead statusCode, message, options.headers
   res.end "<html><body><h1>#{message}</h1></body></html>"
   return
 
@@ -892,7 +892,7 @@ module.exports = browserChannel = (options, onConnect) ->
     else if pathname is "#{base}/test"
       # This server only supports browserchannel protocol version **8**.
       # I have no idea if 400 is the right error here.
-      return sendError res, 400, 'Version 8 required' unless query.VER is '8'
+      return sendError res, 400, 'Version 8 required', options unless query.VER is '8'
 
       #### Phase 1: Server info
       # The client is requests host prefixes. The server responds with an array of
@@ -950,7 +950,7 @@ module.exports = browserChannel = (options, onConnect) ->
     else if pathname == "#{base}/bind"
       # I'm copying the behaviour of unknown SIDs below. I don't know how the client
       # is supposed to detect this error, but, eh. The other choice is to `return writeError ...`
-      return sendError res, 400, 'Version 8 required' unless query.VER is '8'
+      return sendError res, 400, 'Version 8 required', options unless query.VER is '8'
 
       # All browserchannel connections have an associated client object. A client
       # is created immediately if the connection is new.
@@ -962,7 +962,7 @@ module.exports = browserChannel = (options, onConnect) ->
         # For some reason, google replies with the same response on HTTP and HTML requests here.
         # I'll follow suit, though its a little weird. Maybe I should do the same with all client
         # errors?
-        return sendError res, 400, 'Unknown SID' unless session
+        return sendError res, 400, 'Unknown SID', options unless session
 
       session._acknowledgeArrays query.AID if query.AID? and session
 
@@ -979,7 +979,7 @@ module.exports = browserChannel = (options, onConnect) ->
 
         dataError = (e) ->
           console.warn 'Error parsing forward channel', e.stack
-          return sendError res, 400, 'Bad data'
+          return sendError res, 400, 'Bad data', options
 
         processData = (data) ->
           try
@@ -1001,7 +1001,7 @@ module.exports = browserChannel = (options, onConnect) ->
             # session.state can be already closed at this point.  I'll assume
             # there was an authentication problem and treat this as a forbidden
             # connection attempt.
-            sendError res, 403, 'Forbidden'
+            sendError res, 403, 'Forbidden', options
           else
             # On normal forward channels, we reply to the request by telling
             # the session if our backchannel is still live and telling it how
@@ -1026,8 +1026,8 @@ module.exports = browserChannel = (options, onConnect) ->
         # GET messages are usually backchannel requests (server->client).
         # Backchannel messages are handled by the session object.
         if query.TYPE in ['xmlhttp', 'html']
-          return sendError res, 400, 'Invalid SID' if typeof query.SID != 'string' && query.SID.length < 5
-          return sendError res, 400, 'Expected RPC' unless query.RID is 'rpc'
+          return sendError res, 400, 'Invalid SID', options if typeof query.SID != 'string' && query.SID.length < 5
+          return sendError res, 400, 'Expected RPC', options unless query.RID is 'rpc'
           writeHead()
           session._setBackChannel res, query
         # The client can manually disconnect by making a GET request with TYPE='terminate'

@@ -105,8 +105,8 @@ messagingMethods = function(options, query, res) {
   }
 };
 
-sendError = function(res, statusCode, message) {
-  res.writeHead(statusCode, message);
+sendError = function(res, statusCode, message, options) {
+  res.writeHead(statusCode, message, options.headers);
   res.end("<html><body><h1>" + message + "</h1></body></html>");
 };
 
@@ -564,7 +564,7 @@ module.exports = browserChannel = function(options, onConnect) {
       }
     } else if (pathname === ("" + base + "/test")) {
       if (query.VER !== '8') {
-        return sendError(res, 400, 'Version 8 required');
+        return sendError(res, 400, 'Version 8 required', options);
       }
       if (query.MODE === 'init' && req.method === 'GET') {
         hostPrefix = getHostPrefix();
@@ -588,12 +588,12 @@ module.exports = browserChannel = function(options, onConnect) {
       }
     } else if (pathname === ("" + base + "/bind")) {
       if (query.VER !== '8') {
-        return sendError(res, 400, 'Version 8 required');
+        return sendError(res, 400, 'Version 8 required', options);
       }
       if (query.SID) {
         session = sessions[query.SID];
         if (!session) {
-          return sendError(res, 400, 'Unknown SID');
+          return sendError(res, 400, 'Unknown SID', options);
         }
       }
       if ((query.AID != null) && session) {
@@ -609,7 +609,7 @@ module.exports = browserChannel = function(options, onConnect) {
         }
         dataError = function(e) {
           console.warn('Error parsing forward channel', e.stack);
-          return sendError(res, 400, 'Bad data');
+          return sendError(res, 400, 'Bad data', options);
         };
         processData = function(data) {
           var response;
@@ -630,7 +630,7 @@ module.exports = browserChannel = function(options, onConnect) {
             });
             return session.flush();
           } else if (session.state === 'closed') {
-            return sendError(res, 403, 'Forbidden');
+            return sendError(res, 403, 'Forbidden', options);
           } else {
             response = JSON.stringify(session._backChannelStatus());
             res.writeHead(200, 'OK', options.headers);
@@ -653,10 +653,10 @@ module.exports = browserChannel = function(options, onConnect) {
       } else if (req.method === 'GET') {
         if ((_ref4 = query.TYPE) === 'xmlhttp' || _ref4 === 'html') {
           if (typeof query.SID !== 'string' && query.SID.length < 5) {
-            return sendError(res, 400, 'Invalid SID');
+            return sendError(res, 400, 'Invalid SID', options);
           }
           if (query.RID !== 'rpc') {
-            return sendError(res, 400, 'Expected RPC');
+            return sendError(res, 400, 'Expected RPC', options);
           }
           writeHead();
           return session._setBackChannel(res, query);
