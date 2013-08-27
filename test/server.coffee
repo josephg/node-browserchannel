@@ -339,6 +339,7 @@ suite 'server', ->
   test 'CORS header is not sent if its not set in the options', (done) ->
     @get '/channel/test?VER=8&MODE=init', (response) ->
       assert.strictEqual response.headers['access-control-allow-origin'], undefined
+      assert.strictEqual response.headers['access-control-allow-credentials'], undefined
       response.socket.end()
       done()
 
