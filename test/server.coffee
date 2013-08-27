@@ -29,7 +29,7 @@ browserChannel._setTimerMethods timer
 # This function provides an easy way for tests to create a new browserchannel server using
 # connect().
 #
-# I'll create a new server in the setUp function of all the tests, but some
+# I'll create a new server in the setup function of all the tests, but some
 # tests will need to customise the options, so they can just create another server directly.
 createServer = (opts, method, callback) ->
   # Its possible to use the browserChannel middleware without specifying an options
@@ -182,7 +182,7 @@ e0daf1a178fc0f58cd309308fba7e6f011ac38c9cdd4580760f1d4560a84d5ca0355ecbbed2ab715
 a9fe92fedacffff48092ee693af\n"
 
 suite 'server', ->
-  # #### setUp
+  # #### setup
   #
   # Before each test has run, we'll start a new server. The server will only live
   # for that test and then it'll be torn down again.
@@ -342,10 +342,11 @@ suite 'server', ->
       response.socket.end()
       done()
 
-  test 'CORS header is sent during the initial phase if its set in the options', (done) ->
-    createServer cors:'foo.com', (->), (server, port) ->
+  test 'CORS headers are sent during the initial phase if set in the options', (done) ->
+    createServer cors:'foo.com', corsAllowCredentials:true, (->), (server, port) ->
       http.get {path:'/channel/test?VER=8&MODE=init', host: 'localhost', port: port}, (response) ->
         assert.strictEqual response.headers['access-control-allow-origin'], 'foo.com'
+        assert.strictEqual response.headers['access-control-allow-credentials'], 'true'
         buffer response
         server.close()
         done()
@@ -359,15 +360,48 @@ suite 'server', ->
 
       req = http.get {path:"/channel/bind?VER=8&RID=rpc&SID=#{session.id}&AID=0&TYPE=xmlhttp&CI=0", host:'localhost', port:port}, (res) =>
         assert.strictEqual res.headers['access-control-allow-origin'], 'foo.com'
+        assert.strictEqual res.headers['access-control-allow-credentials'], 'true'
         req.abort()
         server.close()
         done()
     
-    createServer cors:'foo.com', sessionCreated, (_server, _port) ->
+    createServer cors:'foo.com', corsAllowCredentials:true, sessionCreated, (_server, _port) ->
       [server, port] = [_server, _port]
 
       req = http.request {method:'POST', path:'/channel/bind?VER=8&RID=1000&t=1', host:'localhost', port:port}, (res) =>
       req.end 'count=0'
+
+  # This test is just testing one of the error responses for the presence of
+  # the CORS header. It doesn't test all of the ports, and doesn't test IE.
+  # (I'm not actually sure if CORS headers are needed for IE stuff)
+  suite 'CORS header is set in error responses', ->
+    setup (callback) ->
+      createServer cors:'foo.com', corsAllowCredentials:true, (->), (@corsServer, @corsPort) =>
+        callback()
+
+    teardown ->
+      @corsServer.close()
+
+    testResponse = (done, req, res) ->
+      assert.strictEqual res.statusCode, 400
+      assert.strictEqual res.headers['access-control-allow-origin'], 'foo.com'
+      assert.strictEqual res.headers['access-control-allow-credentials'], 'true'
+      buffer res, (data) ->
+        assert.ok data.indexOf('Unknown SID') > 0
+        req.abort()
+        done()
+
+    test 'backChannel', (done) ->
+      req = http.get {path:'/channel/bind?VER=8&RID=rpc&SID=madeup&AID=0&TYPE=xmlhttp&CI=0', host:'localhost', port:@corsPort}, (res) =>
+        testResponse done, req, res
+
+    test 'forwardChannel', (done) ->
+      req = http.request {method:'POST', path:'/channel/bind?VER=8&RID=1001&SID=junkyjunk&AID=0', host:'localhost', port:@corsPort}, (res) =>
+        testResponse done, req, res
+      req.end 'count=0'
+
+      #@post "/channel/bind?VER=8&RID=1001&SID=junkyjunk&AID=0", 'count=0', testResponse(done)
+
 
   test 'Additional headers can be specified in the options', (done) ->
     createServer headers:{'X-Foo':'bar'}, (->), (server, port) ->

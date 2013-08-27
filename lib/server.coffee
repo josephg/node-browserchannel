@@ -81,7 +81,28 @@ defaultOptions =
   # application. BE CAREFUL!  If your application uses cookies to manage user
   # sessions, javascript on a foreign site could make requests as if it were
   # acting on behalf of one of your users.
+  #
+  # Setting cors:'X' is equivalent to adding
+  #  {headers: {'Access-Control-Allow-Origin':X}}.
   cors: null
+
+  # Even with Access-Control-Allow-Origin enabled, browsers don't send their
+  # cookies to different domains. You can set corsAllowCredentials to be true
+  # to add the `Access-Control-Allow-Credentials: true` header to responses.
+  # This tells browsers they are allowed to send credentialed requests (ie,
+  # requests with cookies) to a foreign domain. If you do this, you must *also*
+  # set {crossDomainXhr:true} in your BCSocket browser options to tell XHR
+  # requests to send credentials.
+  #
+  # Also note that credentialed requests require explicitly mentioned domains
+  # to work. You cannot use a wildcard cors header (`cors:*`) if you want
+  # credentials.
+  #
+  # See: https://developer.mozilla.org/en-US/docs/HTTP/Access_control_CORS#Requests_with_credentials
+  #
+  # Setting corsAllowCredentials:true is equivalent to adding:
+  #  {headers: {'Access-Control-Allow-Credentials':true}}.
+  corsAllowCredentials: false
 
   # A user can override all the headers if they want by setting the headers
   # option to an object.
@@ -391,6 +412,7 @@ module.exports = browserChannel = (options, onConnect) ->
   options.headers = {} unless options.headers
   options.headers[h] ||= v for h, v of standardHeaders
   options.headers['Access-Control-Allow-Origin'] = options.cors if options.cors
+  options.headers['Access-Control-Allow-Credentials'] = true if options.corsAllowCredentials
 
   # Strip off a trailing slash in base.
   base = options.base

@@ -27,6 +27,7 @@ defaultOptions = {
   keepAliveInterval: 20 * 1000,
   sessionTimeoutInterval: 30 * 1000,
   cors: null,
+  corsAllowCredentials: false,
   headers: null
 };
 
@@ -261,6 +262,9 @@ module.exports = browserChannel = function(options, onConnect) {
   }
   if (options.cors) {
     options.headers['Access-Control-Allow-Origin'] = options.cors;
+  }
+  if (options.corsAllowCredentials) {
+    options.headers['Access-Control-Allow-Credentials'] = true;
   }
   base = options.base;
   if (base.match(/\/$/)) {
