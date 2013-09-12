@@ -54,6 +54,12 @@ server = module.exports = connect(
   browserChannel base:'/stop2', (session) ->
     process.nextTick ->
       session.stop()
+
+  # Send the characters that aren't valid javascript as literals
+  # http://timelessrepo.com/json-isnt-a-javascript-subset
+  browserChannel base:'/utfsep', (session) ->
+    session.send "\u2028 \u2029"
+    #session.send {"\u2028 \u2029"}
 )
 
 if require.main == module

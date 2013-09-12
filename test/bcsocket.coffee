@@ -265,5 +265,14 @@ suite 'bcsocket', ->
       @socket.sendMap {data:"#{i}", juuuuuuuuuuuuuuuuunnnnnnnnnk:'waaaazzzzzzuuuuuppppppp'} for i in [0...num]
     , 0
 
+  # We need to be able to send \u2028 and \u2029
+  # http://timelessrepo.com/json-isnt-a-javascript-subset
+  test 'Line separator and paragraph separators work', (done) ->
+    @socket = new BCSocket '/utfsep', appVersion: 321
+
+    @socket.onmessage = (message) ->
+      assert.strictEqual message, "\u2028 \u2029"
+      done()
+
   # Write me!
   test 'extraParams are passed to the server'
