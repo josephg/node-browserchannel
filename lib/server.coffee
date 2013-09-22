@@ -353,6 +353,8 @@ order = (start, playOld) ->
         base++
         callback()
 
+    return
+
 # Host prefixes provide a way to skirt around connection limits. They're only
 # really important for old browsers.
 getHostPrefix = (options) ->
@@ -1107,7 +1109,10 @@ module.exports = browserChannel = (options, onConnect) ->
       res.writeHead 404, 'Not Found', options.headers
       res.end "Not found"
 
-  middleware.close = -> session.close() for id, session of sessions
+  middleware.close = ->
+    for id, session of sessions
+      session.close()
+    return
 
   # This is an undocumented, untested treat - if you pass the HTTP server /
   # connect server to browserchannel through the options object, it can attach
