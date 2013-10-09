@@ -56,7 +56,8 @@ if typeof window is 'undefined'
 
 
 suite 'bcsocket', ->
-  @timeout 5000
+  # IE6 takes about 12 seconds to do the large stress test
+  @timeout 20000
 
   teardown (callback) ->
     if @socket? and @socket.readyState isnt BCSocket.CLOSED
