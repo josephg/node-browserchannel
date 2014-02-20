@@ -275,5 +275,19 @@ suite 'bcsocket', ->
       assert.strictEqual message, "\u2028 \u2029"
       done()
 
-  # Write me!
-  test 'extraParams are passed to the server'
+  # We should be able to specify GET variables to be sent with every request.
+  test 'extraParams are passed to the server', (done) ->
+    @socket = new BCSocket '/extra', extraParams: foo: 'bar'
+
+    @socket.onmessage = (message) ->
+      console.log message.foo, 'bar'
+      done()
+
+  test 'Session affinity tokens are generated', (done) ->
+    @socket = new BCSocket '/extra'
+    affinity = @socket.affinity
+
+    @socket.onmessage = (message) ->
+      assert.strictEqual message.a, affinity
+      done()
+
