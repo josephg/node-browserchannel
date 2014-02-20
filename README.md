@@ -164,7 +164,7 @@ Rebuilding the client library is annoying, so I keep an up to date compiled copy
 1. Download the closure library
 
 ```
-svn checkout http://closure-library.googlecode.com/svn/trunk/ closure-library
+git clone https://code.google.com/p/closure-library/
 cd closure-library
 ```
 
