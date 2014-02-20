@@ -161,9 +161,10 @@ still hasn't fixed in their library (and probably never will), so I have a patch
 
 Rebuilding the client library is annoying, so I keep an up to date compiled copy in `dist/`.
 
-1. Download the closure library
+1. Download the closure library as a sibling of this repository
 
     ```
+    cd ..
     git clone https://code.google.com/p/closure-library/
     cd closure-library
     ```
