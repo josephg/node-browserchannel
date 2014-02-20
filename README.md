@@ -171,8 +171,9 @@ cd closure-library
 2. Download the closure compiler
 
 ```
-curl http://closure-compiler.googlecode.com/files/compiler-latest.zip > compiler-latest.zip
-unzip compiler-latest.zip compiler.jar
+curl http://dl.google.com/closure-compiler/compiler-latest.tar.gz > compiler-latest.tar.gz
+tar -xvf compiler-latest.tar.gz
+mv compiler-latest/compiler.jar .
 ```
 
 3. Patch the library
