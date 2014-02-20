@@ -191,6 +191,11 @@ Rebuilding the client library is annoying, so I keep an up to date compiled copy
     make
     ```
 
+## Caveats
+
+### Java ~1.7 is a hard requirement.
+Building this project with Java ~1.6 will fail, and may even fail silently.
+
 
 ---
 
