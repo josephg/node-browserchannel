@@ -163,32 +163,32 @@ Rebuilding the client library is annoying, so I keep an up to date compiled copy
 
 1. Download the closure library
 
-```
-git clone https://code.google.com/p/closure-library/
-cd closure-library
-```
+    ```
+    git clone https://code.google.com/p/closure-library/
+    cd closure-library
+    ```
 
 2. Download the closure compiler
 
-```
-curl http://dl.google.com/closure-compiler/compiler-latest.tar.gz > compiler-latest.tar.gz
-tar -xvf compiler-latest.tar.gz
-mv compiler-latest/compiler.jar .
-```
+    ```
+    curl http://dl.google.com/closure-compiler/compiler-latest.tar.gz > compiler-latest.tar.gz
+    tar -xvf compiler-latest.tar.gz
+    mv compiler-latest/compiler.jar .
+    ```
 
 3. Patch the library
 
-```
-cd closure/
-patch -p0 < ../../node-browserchannel/closure-*.patch
-```
+    ```
+    cd closure/
+    patch -p0 < ../../node-browserchannel/closure-*.patch
+    ```
 
 4. Build
 
-```
-cd ../../node-browserchannel
-make
-```
+    ```
+    cd ../../node-browserchannel
+    make
+    ```
 
 
 ---
