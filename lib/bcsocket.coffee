@@ -41,6 +41,7 @@ goog.require 'goog.net.BrowserChannel'
 goog.require 'goog.net.BrowserChannel.Handler'
 goog.require 'goog.net.BrowserChannel.Error'
 goog.require 'goog.net.BrowserChannel.State'
+goog.require 'goog.string'
 
 # Uncomment for extra debugging information in the console. This currently breaks nodejs support
 # unfortunately.
@@ -93,6 +94,17 @@ BCSocket = (url, options) ->
   options = {} if goog.isArray options or typeof options is 'string'
 
   reconnectTime = options['reconnectTime'] or 3000
+
+  # Generate a session affinity token to send with all requests.
+  # For use with a load balancer that parses GET variables.
+  unless options['affinity']?['disabled']
+    options['extraParams']      ||= {}
+    options['affinity']         ||= {}
+    options['affinity']['get']  ||= 'a'
+    options['affinity']['id']   ||= goog.string.getRandomString()
+
+    @['affinity'] = options['affinity']['id']
+    options['extraParams'][options['affinity']['get']] = @['affinity']
 
   # The channel starts CLOSED. When connect() is called, the channel moves into the CONNECTING
   # state. If it connects, it moves to OPEN. If an error occurs (or an error occurs while the
