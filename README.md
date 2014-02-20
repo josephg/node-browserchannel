@@ -166,6 +166,7 @@ Rebuilding the client library is annoying, so I keep an up to date compiled copy
     ```
     cd ..
     git clone https://code.google.com/p/closure-library/
+    git checkout -q 83c6a0b97bd16e23a8578ddb1a53d8e1a21fb4cf
     cd closure-library
     ```
 
@@ -195,6 +196,10 @@ Rebuilding the client library is annoying, so I keep an up to date compiled copy
 
 ### Java ~1.7 is a hard requirement.
 Building this project with Java ~1.6 will fail, and may even fail silently.
+
+### Known issue with latest closure-library.
+Until #34 is resolved upstream, use closure-library#83c6a0b97bd1
+
 
 
 ---
