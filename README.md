@@ -161,33 +161,47 @@ still hasn't fixed in their library (and probably never will), so I have a patch
 
 Rebuilding the client library is annoying, so I keep an up to date compiled copy in `dist/`.
 
-1. Download the closure library
+1. Download the closure library as a sibling of this repository
 
-```
-svn checkout http://closure-library.googlecode.com/svn/trunk/ closure-library
-cd closure-library
-```
+    ```
+    cd ..
+    git clone https://code.google.com/p/closure-library/
+    git checkout -q df47692b1bacd494548a3b00b150d9f6a428d58a
+    cd closure-library
+    ```
 
 2. Download the closure compiler
 
-```
-curl http://closure-compiler.googlecode.com/files/compiler-latest.zip > compiler-latest.zip
-unzip compiler-latest.zip compiler.jar
-```
+    ```
+    curl http://dl.google.com/closure-compiler/compiler-latest.tar.gz > compiler-latest.tar.gz
+    tar -xvf compiler-latest.tar.gz
+    mv compiler-latest/compiler.jar .
+    ```
 
 3. Patch the library
 
-```
-cd closure/
-patch -p0 < ../../node-browserchannel/closure-*.patch
-```
+    ```
+    cd closure/
+    patch -p0 < ../../node-browserchannel/closure-*.patch
+    ```
 
 4. Build
 
-```
-cd ../../node-browserchannel
-make
-```
+    ```
+    cd ../../node-browserchannel
+    make
+    ```
+
+## Caveats
+
+### Java ~1.7 is a hard requirement.
+Building this project with Java ~1.6 will fail, and may even fail silently.
+
+### Known issue with latest closure-library.
+Until [the bug][34] introduced in `closure-library#83c6a0b9`
+is resolved upstream, use `closure-library#df47692`
+
+[34]: https://github.com/josephg/node-browserchannel/issues/34
 
 
 ---
