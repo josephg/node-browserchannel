@@ -1,14 +1,8 @@
 # # Unit tests for BrowserChannel server
 #
-# This contains all the unit tests to make sure the server works like it should.
-#
-# This is designed to be run using nodeunit. To run the tests, install nodeunit:
-#
-#     npm install -g nodeunit
-#
-# then run the server tests with:
-#
-#     nodeunit test/server.coffee
+# This contains all the unit tests to make sure the server works like it
+# should. The tests are written using mocha - you can run them using 
+# % npm test
 #
 # For now I'm not going to add in any SSL testing code. I should probably generate
 # a self-signed key pair, start the server using https and make sure that I can
