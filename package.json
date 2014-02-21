@@ -20,7 +20,7 @@
     "request": "~2"
   },
   "devDependencies": {
-    "coffee-script": "~1.7",
+    "coffee-script": "~1.6",
     "timerstub": "*",
     "mocha": "*"
   }
