@@ -35,7 +35,10 @@ PRETTY_PRINT = --compiler_flags=--formatting=PRETTY_PRINT
 COFFEE = ./node_modules/.bin/coffee
 MOCHA = ./node_modules/.bin/mocha
 
-all: dist/server.js dist/bcsocket.js dist/node-bcsocket.js dist/bcsocket-uncompressed.js dist/node-bcsocket-uncompressed.js
+all: check dist/server.js dist/bcsocket.js dist/node-bcsocket.js dist/bcsocket-uncompressed.js dist/node-bcsocket-uncompressed.js
+
+check:
+	@$(call check)
 
 clean:
 	rm -rf tmp
@@ -66,4 +69,25 @@ tmp/compiled-bcsocket-uncompressed.js: tmp/bcsocket.js tmp/browserchannel.js
 
 tmp/compiled-node-bcsocket-uncompressed.js: tmp/bcsocket.js tmp/nodejs-override.js tmp/browserchannel.js
 	$(CLOSURE_BUILDER) $(CLOSURE_CFLAGS) --compiler_flags=--formatting=PRETTY_PRINT --namespace=bc.node > $@
+
+##
+# Things can fail silently with the wrong java version.
+#
+# While jscompiler.py does parse the currently installed java version
+# and is supposed to abort on Java < 1.7, double checking here
+# adds safety by aborting the entire build.
+#
+# Additionally, with JDK 8 expected next month, this provides
+# insurance until we're sure that 1.8 won't break anything.
+#
+# At this time closure/bin/build/jscompiler.py uses whatever java
+# is currently in the path, and does not read $JAVA_HOME
+JAVA_REQUIRED=1.7
+JAVA_VERSION=$(shell java -version 2>&1 | awk -F '"' '{ print $$2 }')
+check = \
+	if [[ $(JAVA_VERSION) != $(JAVA_REQUIRED).* ]]; then \
+		echo "java version ~$(JAVA_REQUIRED) is required."; \
+		java -version; \
+		exit 1; \
+	fi
 
