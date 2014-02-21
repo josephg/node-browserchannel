@@ -1,5 +1,7 @@
-before_script: "npm install"
-script: "npm test"
 language: node_js
+before_script:
+  - "WD=`pwd`"
+  - "cd ../ && git clone --branch compat/node-browserchannel https://github.com/wenzowski/closure-library.git"
+  - "cd $WD && make all"
 node_js:
   - "0.10"
