@@ -97,14 +97,12 @@ BCSocket = (url, options) ->
 
   # Generate a session affinity token to send with all requests.
   # For use with a load balancer that parses GET variables.
-  unless options['affinity']?['disabled']
+  unless options['affinity'] is null
     options['extraParams']      ||= {}
-    options['affinity']         ||= {}
-    options['affinity']['get']  ||= 'a'
-    options['affinity']['id']   ||= goog.string.getRandomString()
+    options['affinityParam']    ||= 'a'
 
-    @['affinity'] = options['affinity']['id']
-    options['extraParams'][options['affinity']['get']] = @['affinity']
+    @['affinity'] = options['affinity'] || goog.string.getRandomString()
+    options['extraParams'][options['affinityParam']] = @['affinity']
 
   # The channel starts CLOSED. When connect() is called, the channel moves into the CONNECTING
   # state. If it connects, it moves to OPEN. If an error occurs (or an error occurs while the
