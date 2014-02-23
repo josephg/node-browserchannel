@@ -101,6 +101,7 @@ BCSocket = (url, options) ->
   # At any time, you can call close(), which disconnects the socket.
 
   setState = (state) -> # This is convenient for logging state changes, and increases compression.
+    #console?.log "state from #{self.readyState} to #{state}"
     self.readyState = self['readyState'] = state
 
   setState @CLOSED
@@ -138,9 +139,13 @@ BCSocket = (url, options) ->
   # disconnected.
   handler.channelError = (channel, errCode) ->
     message = errorMessages[errCode]
-    #console?.error 'channel error', errCode, message
+    #console?.error "channelError #{errCode} : #{message} in state #{self.readyState}"
     lastErrorCode = errCode
-    setState BCSocket.CLOSING
+
+    # If your network connection is down, you'll get General Network Errors
+    # passing through here even when you're not connected.
+    setState BCSocket.CLOSING unless self.readyState is BCSocket.CLOSED
+
     # I'm not 100% sure what websockets do if there's an error like this. I'm going to assume it has the
     # same behaviour as browserchannel - that is, onclose() is always called if a connection closes, and
     # onerror is called whenever an error occurs.
@@ -183,10 +188,6 @@ BCSocket = (url, options) ->
 
     setState BCSocket.CLOSED
 
-    # This whole method is surrounded in a try-catch block to silently discard exceptions.
-    try
-      fireCallback 'onclose', message, pendingMaps, undeliveredMaps
-
     # If the error message is STOP, we won't reconnect. That means the server has explicitly requested
     # the client give up trying to reconnect due to some error.
     #
@@ -198,6 +199,12 @@ BCSocket = (url, options) ->
 
       clearTimeout reconnectTimer
       reconnectTimer = setTimeout reconnect, time
+
+    # This whole method is surrounded in a try-catch block to silently discard
+    # exceptions. This happens after the reconnect timer is set so the callback
+    # can call close() to cancel reconnection.
+    try
+      fireCallback 'onclose', message, pendingMaps, undeliveredMaps
 
     # make sure we don't reuse an old error message later
     lastErrorCode = null
