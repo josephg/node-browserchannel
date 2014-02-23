@@ -31,6 +31,11 @@ fs = require 'fs'
 # Client session Ids are generated using `node-hat`
 hat = require('hat').rack(40, 36)
 
+# When sending messages to IE using a hidden iframe, UTF8-encoded characters
+# don't get processed correctly. This encodes unicode characters using the
+# \u2028 encoding style, which (thankfully) makes it through.
+asciijson = require 'ascii-json'
+
 # `randomInt(n)` generates and returns a random int smaller than n (0 <= k < n)
 randomInt = (n) -> Math.floor(Math.random() * n)
 
@@ -155,7 +160,7 @@ a9fe92fedacffff48092ee693af\n"
 #   happens using XHR/Trident like regular forward channel requests.
 messagingMethods = (options, query, res) ->
   type = query.TYPE
-  if type == 'html'
+  if type == 'html' # IE encoding using messaging via a slowly loading script file
     junkSent = false
 
     methods =
@@ -171,11 +176,11 @@ messagingMethods = (options, query, res) ->
           # Make sure the domain doesn't contain anything by naughty by
           # `JSON.stringify()`-ing it before passing it to the client. There
           # are XSS vulnerabilities otherwise.
-          res.write "<script>try{document.domain=#{JSON.stringify domain};}catch(e){}</script>\n"
+          res.write "<script>try{document.domain=#{asciijson.stringify domain};}catch(e){}</script>\n"
     
       write: (data) ->
         # The data is passed to `m()`, which is bound to *onTridentRpcMessage_* in the client.
-        res.write "<script>try {parent.m(#{JSON.stringify data})} catch(e) {}</script>\n"
+        res.write "<script>try {parent.m(#{asciijson.stringify data})} catch(e) {}</script>\n"
         unless junkSent
           res.write ieJunk
           junkSent = true
@@ -193,7 +198,7 @@ messagingMethods = (options, query, res) ->
         # script tag didn't complete successfully. To signal errors, we return
         # **200 OK** and call an exposed rpcClose() method on the page.
         methods.writeHead()
-        res.end "<script>try {parent.rpcClose(#{JSON.stringify message})} catch(e){}</script>\n"
+        res.end "<script>try {parent.rpcClose(#{asciijson.stringify message})} catch(e){}</script>\n"
 
     # For some reason, sending data during the second test (111112) works
     # slightly differently for XHR, but its identical for html encoding. We'll
@@ -203,7 +208,7 @@ messagingMethods = (options, query, res) ->
 
     methods
 
-  else
+  else # Encoding for modern browsers
     # For normal XHR requests, we send data normally.
     writeHead: -> res.writeHead 200, 'OK', options.headers
     write: (data) -> res.write "#{data.length}\n#{data}"
