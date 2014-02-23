@@ -13,7 +13,7 @@
 # this repo). The patch fixes some cleanup issues in the closure library to
 # make sure everything gets cleaned up properly when connections close.
 
-.PHONY: clean, all, test
+.PHONY: clean, all, test, check-java
 
 CLOSURE_DIR = ../closure-library
 CLOSURE_COMPILER = ../closure-library/compiler.jar
@@ -35,10 +35,7 @@ PRETTY_PRINT = --compiler_flags=--formatting=PRETTY_PRINT
 COFFEE = ./node_modules/.bin/coffee
 MOCHA = ./node_modules/.bin/mocha
 
-all: check dist/server.js dist/bcsocket.js dist/node-bcsocket.js dist/bcsocket-uncompressed.js dist/node-bcsocket-uncompressed.js
-
-check:
-	@$(call check)
+all: dist/server.js dist/bcsocket.js dist/node-bcsocket.js dist/bcsocket-uncompressed.js dist/node-bcsocket-uncompressed.js
 
 clean:
 	rm -rf tmp
@@ -58,18 +55,6 @@ dist/%.js: tmp/compiled-%.js
 dist/server.js: lib/server.coffee
 	$(COFFEE) -bco dist $<
 
-tmp/compiled-bcsocket.js: tmp/bcsocket.js tmp/browserchannel.js
-	$(CLOSURE_BUILDER) $(CLOSURE_CFLAGS) > $@
-
-tmp/compiled-node-bcsocket.js: tmp/bcsocket.js tmp/nodejs-override.js tmp/browserchannel.js
-	$(CLOSURE_BUILDER) $(CLOSURE_CFLAGS) --namespace=bc.node > $@
-
-tmp/compiled-bcsocket-uncompressed.js: tmp/bcsocket.js tmp/browserchannel.js
-	$(CLOSURE_BUILDER) $(CLOSURE_CFLAGS) --compiler_flags=--formatting=PRETTY_PRINT > $@
-
-tmp/compiled-node-bcsocket-uncompressed.js: tmp/bcsocket.js tmp/nodejs-override.js tmp/browserchannel.js
-	$(CLOSURE_BUILDER) $(CLOSURE_CFLAGS) --compiler_flags=--formatting=PRETTY_PRINT --namespace=bc.node > $@
-
 ##
 # Things can fail silently with the wrong java version.
 #
@@ -82,12 +67,18 @@ tmp/compiled-node-bcsocket-uncompressed.js: tmp/bcsocket.js tmp/nodejs-override.
 #
 # At this time closure/bin/build/jscompiler.py uses whatever java
 # is currently in the path, and does not read $JAVA_HOME
-JAVA_REQUIRED=1.7
-JAVA_VERSION=$(shell java -version 2>&1 | awk -F '"' '{ print $$2 }')
-check = \
-	if [[ $(JAVA_VERSION) != $(JAVA_REQUIRED).* ]]; then \
-		echo "java version ~$(JAVA_REQUIRED) is required."; \
-		java -version; \
-		exit 1; \
-	fi
+check-java:
+	java -version 2>&1 | grep -e "[^\d\.]1\.7"
+
+tmp/compiled-bcsocket.js: check-java tmp/bcsocket.js tmp/browserchannel.js
+	$(CLOSURE_BUILDER) $(CLOSURE_CFLAGS) > $@
+
+tmp/compiled-node-bcsocket.js: check-java tmp/bcsocket.js tmp/nodejs-override.js tmp/browserchannel.js
+	$(CLOSURE_BUILDER) $(CLOSURE_CFLAGS) --namespace=bc.node > $@
+
+tmp/compiled-bcsocket-uncompressed.js: check-java tmp/bcsocket.js tmp/browserchannel.js
+	$(CLOSURE_BUILDER) $(CLOSURE_CFLAGS) --compiler_flags=--formatting=PRETTY_PRINT > $@
+
+tmp/compiled-node-bcsocket-uncompressed.js: check-java tmp/bcsocket.js tmp/nodejs-override.js tmp/browserchannel.js
+	$(CLOSURE_BUILDER) $(CLOSURE_CFLAGS) --compiler_flags=--formatting=PRETTY_PRINT --namespace=bc.node > $@
 
