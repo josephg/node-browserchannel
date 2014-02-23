@@ -711,6 +711,9 @@ BrowserChannelSession::_receivedData = (rid, data) ->
               session.close 'Invalid JSON'
               return
             session.emit 'message', message
+          # Raw string messages are embedded in a _S: property in a map.
+          else if map._S?
+            session.emit 'message', map._S
     else
       # We have data.json. We'll just emit it directly.
       for message in data.json

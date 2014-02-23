@@ -34,11 +34,9 @@
 #
 # - Sometimes (maybe, 1 in 10) times the test is run from nodejs, it dies in a weird inconsistant
 #   state.
-# - Sometimes (about 1/4 times) the tests are run, the process doesn't exit for about 5 seconds after
-#   the tests have finished. Presumably, there's a setTimeout() in the client somewhere which has
-#   a race condition causing it to misbehave.
 # - After a test run, 4 sessions are allowed to time out by the server. (Its odd because I'm calling
 #   disconnect() in tearDown).
+#
 
 assert = require 'assert'
 
