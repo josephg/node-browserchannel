@@ -231,7 +231,14 @@ BCSocket = (url, options) ->
     lastErrorCode = null
 
   # Messages from the server are passed directly.
-  handler.channelHandleArray = (channel, message) -> fireCallback 'onmessage', message
+  handler.channelHandleArray = (channel, data) ->
+    # Websocket onmessage handlers accept a MessageEvent object, which contains
+    # all sorts of other stuff unrelated to the message itself.
+    message =
+      type: 'message'
+      data: data
+      
+    fireCallback 'onmessage', message
 
   # This reconnects if the current session is null.
   reconnect = ->

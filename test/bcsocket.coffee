@@ -51,7 +51,12 @@ if typeof window is 'undefined'
   global.BCSocket = bc.BCSocket
   bc.setDefaultLocation 'http://localhost:4321'
 
-
+# This is a little logging function for old IE. It adds a log() function which
+# simply appends HTML messages to the document.
+window?.log = log = (str) ->
+  div = document.createElement 'div'
+  div.innerHTML = str
+  document.body.appendChild div
 
 suite 'bcsocket', ->
   # IE6 takes about 12 seconds to do the large stress test
@@ -92,7 +97,7 @@ suite 'bcsocket', ->
       throw new Error reason
 
     @socket.onmessage = (message) ->
-      assert.deepEqual message, {appVersion: null}
+      assert.deepEqual message.data, {appVersion: null}
       assert.ok openCalled
       done()
 
@@ -102,7 +107,7 @@ suite 'bcsocket', ->
     @socket = new BCSocket '/notify', appVersion: 321
 
     @socket.onmessage = (message) ->
-      assert.deepEqual message, {appVersion:321}
+      assert.deepEqual message.data, {appVersion:321}
       done()
 
   # BrowserChannel's native send method sends a string->string map.
@@ -117,7 +122,7 @@ suite 'bcsocket', ->
     m = (callback) -> (done) ->
       @socket = new BCSocket '/echomap', appVersion: 321
       @socket.onmessage = (message) ->
-        assert.deepEqual message, data
+        assert.deepEqual message.data, data
         done()
 
       callback.apply this
@@ -131,32 +136,101 @@ suite 'bcsocket', ->
 
   # I'll also test the normal send method. This is pretty much the same as above, whereby
   # I'll do the test two ways.
-  suite 'can send and receive JSON messages', ->
-    # Vim gets formatting errors with the cat face glyph here. Sad.
-    data = [null, 1.5, "hi", {}, [1,2,3], '⚗☗⚑☯']
+  suite 'can send and receive', ->
+    test 'unicode', (done) ->
+      # Vim gets formatting errors with the cat face glyph here. Sad.
+      data = '⚗☗⚑☯'
 
-    m = (callback) -> (done) ->
-      # Using the /echo server not /echomap
       @socket = new BCSocket '/echo', appVersion: 321
       @socket.onmessage = (message) ->
-        assert.deepEqual message, data
+        assert.deepEqual message.data, data
         done()
 
-      callback.apply this
-    
-    test 'immediately', m ->
-      # Calling send() instead of sendMap()
-      @socket.send data
-
-    test 'after we have connected', m ->
       @socket.onopen = =>
         @socket.send data
+
+
+
+    suite 'JSON messages', ->
+      # Vim gets formatting errors with the cat face glyph here. Sad.
+      data = [null, 1.5, "hi", {}, [1,2,3], '⚗☗⚑☯']
+
+      m = (callback) -> (done) ->
+        # Using the /echo server not /echomap
+        @socket = new BCSocket '/echo', appVersion: 321
+        @socket.onmessage = (message) ->
+          assert.deepEqual message.data, data
+          done()
+
+        callback.apply this
+      
+      test 'immediately', m ->
+        # Calling send() instead of sendMap()
+        @socket.send data
+
+      test 'after we have connected', m ->
+        @socket.onopen = =>
+          @socket.send data
+
+    suite 'string messages', ->
+      # Vim gets formatting errors with the cat face glyph here. Sad.
+      data = ["hi", "", "    ", "\n", "\t", '⚗☗⚑☯', "\u2028 \u2029", ('x' for [1..1000]).join()]
+
+      # I'm going to send each message in the array in sequence. We should get
+      # them back in the same sequence.
+      pos = 0
+  
+      m = (callback) -> (done) ->
+        # Using the /echo server not /echomap
+        @socket = new BCSocket '/echo', appVersion: 321
+        @socket.onmessage = (message) ->
+          assert pos < data.length
+          assert.deepEqual message.data, data[pos++]
+          done() if pos == data.length
+
+        callback.apply this
+      
+      test 'immediately', m ->
+        pos = 0
+        # Calling send() instead of sendMap()
+        @socket.send str for str in data
+        return
+
+      test 'after we have connected', m ->
+        pos = 0
+        @socket.onopen = =>
+          @socket.send str for str in data
+          return
+
+    # This is a little stress test to make sure I haven't missed anything.
+    # Sending and recieving this much data pushes the client to use multiple
+    # forward channel connections. It doesn't use multiple backchannel
+    # connections - I should probably put some logic there whereby I close the
+    # backchannel after awhile.
+    test 'Lots of data', (done) ->
+      num = 5000
+
+      @socket = new BCSocket '/echomap'
+
+      received = 0
+      @socket.onmessage = (message) ->
+        assert.equal message.data.data, received
+        received++
+
+        done() if received == num
+
+      setTimeout =>
+        # Maps aren't actual JSON. They're just key-value pairs. I don't need to encode i as a string here,
+        # but thats now its sent anyway.
+        @socket.sendMap {data:"#{i}", juuuuuuuuuuuuuuuuunnnnnnnnnk:'waaaazzzzzzuuuuuppppppp'} for i in [0...num]
+      , 0
+
 
   # I have 2 disconnect servers which have slightly different timing regarding when they call close()
   # on the session. If close is called immediately, the initial bind request is rejected
   # with a 403 response, before the client connects.
   test 'disconnecting immediately results in REQUEST_FAILED and a 403', (done) ->
-    @socket = new BCSocket '/dc1'
+    @socket = new BCSocket '/dc1', reconnect: no
 
     @socket.onopen = -> throw new Error 'Socket should not have opened'
 
@@ -171,6 +245,7 @@ suite 'bcsocket', ->
       #
       # This is exactly what websockets do.
       assert.ok onErrorCalled
+      
       done()
 
   test 'disconnecting momentarily allows the client to connect, then onclose() is called', (done) ->
@@ -197,7 +272,7 @@ suite 'bcsocket', ->
   suite 'The client keeps reconnecting', ->
     m = (base) -> (done) ->
       @socket = new BCSocket base, failFast: yes, reconnect: yes, reconnectTime: 300
-      
+
       openCount = 0
 
       @socket.onopen = =>
@@ -208,6 +283,7 @@ suite 'bcsocket', ->
       @socket.onclose = (reason, pendingMaps, undeliveredMaps) =>
         assert.strictEqual @socket.readyState, @socket.CLOSED
 
+        assert openCount < 2
         openCount++
         if openCount is 2
           # Tell the socket to stop trying to connect
@@ -241,36 +317,13 @@ suite 'bcsocket', ->
     test 'on connect', makeTest 'stop1'
     test 'after connect', makeTest 'stop2'
 
-  # This is a little stress test to make sure I haven't missed anything.
-  # Sending and recieving this much data pushes the client to use multiple
-  # forward channel connections. It doesn't use multiple backchannel
-  # connections - I should probably put some logic there whereby I close the
-  # backchannel after awhile.
-  test 'Send & receive lots of data', (done) ->
-    num = 5000
-
-    @socket = new BCSocket '/echomap'
-
-    received = 0
-    @socket.onmessage = (message) ->
-      assert.equal message.data, received
-      received++
-
-      done() if received == num
-
-    setTimeout =>
-      # Maps aren't actual JSON. They're just key-value pairs. I don't need to encode i as a string here,
-      # but thats now its sent anyway.
-      @socket.sendMap {data:"#{i}", juuuuuuuuuuuuuuuuunnnnnnnnnk:'waaaazzzzzzuuuuuppppppp'} for i in [0...num]
-    , 0
-
   # We need to be able to send \u2028 and \u2029
   # http://timelessrepo.com/json-isnt-a-javascript-subset
   test 'Line separator and paragraph separators work', (done) ->
     @socket = new BCSocket '/utfsep', appVersion: 321
 
     @socket.onmessage = (message) ->
-      assert.strictEqual message, "\u2028 \u2029"
+      assert.strictEqual message.data, "\u2028 \u2029"
       done()
 
   # We should be able to specify GET variables to be sent with every request.
