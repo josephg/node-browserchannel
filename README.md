@@ -142,6 +142,10 @@ following properties:
   Access-Control-Allow-Credentials header and can't use wildcard access
   control hostnames. See:
     http://www.html5rocks.com/en/tutorials/cors/#toc-withcredentials
+- **affinity**: Set to null to disable session affinity token passing.
+- **affinityParam**: Session affinity tokens are sent in the query string as
+  the GET parameter `a` by default. Your application may override the
+  variable name if there is a query string conflict.
 
 
 ---
