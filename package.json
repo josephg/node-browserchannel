@@ -2,7 +2,7 @@
   "author": "Joseph Gentle <josephg@gmail.com> (http://josephg.com/)",
   "name": "browserchannel",
   "description": "Google BrowserChannel server for NodeJS",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "homepage": "https://github.com/josephg/node-browserchannel",
   "repository": {
     "type": "git",
