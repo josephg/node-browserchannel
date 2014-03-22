@@ -34,6 +34,9 @@
 #     present, this should be a map of query parameter / value pairs. Note that
 #     these parameters are resent with every request, so you might want to think
 #     twice before putting a lot of stuff in here.
+#   - **extraHeaders**: Extra headers to add to requests. Be advised that not
+#     all headers are allowed by the XHR spec. Headers from NodeJS clients are
+#     unrestricted.
 
 goog.provide 'bc.BCSocket'
 
@@ -95,14 +98,22 @@ BCSocket = (url, options) ->
 
   reconnectTime = options['reconnectTime'] or 3000
 
+  # Extra headers. Not all headers can be set, and the headers that can be set
+  # changes depending on whether we're connecting from nodejs or from the
+  # browser.
+  extraHeaders = options['extraHeaders'] or null
+
+  # Extra GET parameters
+  extraParams = options['extraParams'] or null
+
   # Generate a session affinity token to send with all requests.
   # For use with a load balancer that parses GET variables.
   unless options['affinity'] is null
-    options['extraParams']      ||= {}
-    options['affinityParam']    ||= 'a'
+    extraParams ||= {}
+    options['affinityParam'] ||= 'a'
 
     @['affinity'] = options['affinity'] || goog.string.getRandomString()
-    options['extraParams'][options['affinityParam']] = @['affinity']
+    extraParams[options['affinityParam']] = @['affinity']
 
   # The channel starts CLOSED. When connect() is called, the channel moves into the CONNECTING
   # state. If it connects, it moves to OPEN. If an error occurs (or an error occurs while the
@@ -237,6 +248,7 @@ BCSocket = (url, options) ->
     session = new goog.net.BrowserChannel options['appVersion'], lastSession?.getFirstTestResults()
     session.setSupportsCrossDomainXhrs true if options['crossDomainXhr']
     session.setHandler handler
+    session.setExtraHeaders extraHeaders if extraHeaders
     lastErrorCode = null
 
     session.setFailFast yes if options['failFast']
@@ -244,7 +256,7 @@ BCSocket = (url, options) ->
     # Only needed for debugging..
     #session.setChannelDebug(new goog.net.ChannelDebug())
 
-    session.connect "#{url}/test", "#{url}/bind", options['extraParams'],
+    session.connect "#{url}/test", "#{url}/bind", extraParams,
       lastSession?.getSessionId(), lastSession?.getLastArrayId()
 
   # This isn't in the normal websocket interface. It reopens a previously closed websocket

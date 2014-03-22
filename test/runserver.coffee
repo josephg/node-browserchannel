@@ -61,8 +61,11 @@ server = module.exports = connect(
     session.send "\u2028 \u2029"
     #session.send {"\u2028 \u2029"}
 
-  browserChannel base:'/extra', (session) ->
+  browserChannel base:'/extraParams', (session) ->
     session.send session.query
+
+  browserChannel base:'/extraHeaders', (session) ->
+    session.send session.headers
 )
 
 if require.main == module
