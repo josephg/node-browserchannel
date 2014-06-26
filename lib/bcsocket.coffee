@@ -28,7 +28,7 @@
 #   - **crossDomainXhr**: Set to true to enable the cross-origin credential
 #     flags in XHR requests. The server must send the
 #     Access-Control-Allow-Credentials header and can't use wildcard access
-#     control hostnames. See:
+#     control hostnames. This is needed if you're using host prefixes. See:
 #       http://www.html5rocks.com/en/tutorials/cors/#toc-withcredentials
 #   - **extraParams**: Extra query parameters to be sent with requests. If
 #     present, this should be a map of query parameter / value pairs. Note that
