@@ -311,8 +311,13 @@ BCSocket = (url, options) ->
   # *GOOD IDEA* - any messages sent then should be sent with the initial
   # payload.
   @['sendMap'] = sendMap = (map) ->
-    # This is the raw way to send messages. This will die if the session isn't connected.
-    throw new Error 'Cannot send to a closed connection' if self.readyState in [BCSocket.CLOSING, BCSocket.CLOSED]
+    # This is the raw way to send messages. We'll silently consume messages sent
+    # after the connection closes. This is the logic all consumers of the API
+    # end up implementing anyway.
+    if self.readyState in [BCSocket.CLOSING, BCSocket.CLOSED]
+      #console?.warn 'Cannot send to a closed connection'
+      return
+
     session.sendMap map
 
   # This sends a map of {JSON:"..."} or {_S:"..."}. It is interpreted as a native message by the server.
