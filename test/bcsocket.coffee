@@ -45,9 +45,9 @@ if typeof window is 'undefined'
     require('./runserver').listen 4321
 
   bc = require '..'
-  # If coffeescript declares a variable called 'BCSocket' here, it will shadow the BCSocket variable
-  # that is already defined in the browser. Doing it this way is pretty ugly, but it works and the ugliness
-  # is constrained to a test.
+  # If coffeescript declares a variable called 'BCSocket' here, it will shadow
+  # the BCSocket variable that is already defined in the browser. Doing it this
+  # way is pretty ugly, but it works and the ugliness is constrained to a test.
   global.BCSocket = bc.BCSocket
   bc.setDefaultLocation 'http://localhost:4321'
 
@@ -81,6 +81,12 @@ suite 'bcsocket', ->
     assert.strictEqual BCSocket.prototype.OPEN, 1
     assert.strictEqual BCSocket.prototype.CLOSING, 2
     assert.strictEqual BCSocket.prototype.CLOSED, 3
+
+    assert.strictEqual BCSocket.canSendWhileConnecting, true
+    assert.strictEqual BCSocket.prototype.canSendWhileConnecting, true
+
+    assert.strictEqual BCSocket.canSendJSON, true
+    assert.strictEqual BCSocket.prototype.canSendJSON, true
 
   # Can we connect to the server?
   test 'connect', (done) ->

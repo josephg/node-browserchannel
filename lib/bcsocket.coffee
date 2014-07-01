@@ -81,6 +81,8 @@ errorMessages[goog.net.BrowserChannel.Error.BAD_RESPONSE] = 'Got a bad response 
 
 `/** @constructor */`
 BCSocket = (url, options) ->
+  return new BCSocket(url, options) unless this instanceof BCSocket
+
   self = this
 
   # Url can be relative or absolute. (Though an absolute URL in the browser will
@@ -328,21 +330,26 @@ BCSocket = (url, options) ->
       sendMap '_S': message
     else
       sendMap 'JSON': goog.json.serialize message
-  
-  # Flag to tell clients they can cheat and send while the session is being
-  # established. Its good practice with browserchannel to send messages while
-  # the session is being set up - its faster for your users. But websockets
-  # don't support that. We could pretend that connections open immediately (for
-  # api compatibility), but if people bound UI to the connection state, it would
-  # look wrong.
-  # 
-  # If you want a fast start, look for this flag.
-  @['sendWhileConnecting'] = true
 
   # Websocket connections are automatically opened.
   reconnect()
 
-  this
+  return
+
+# Flag to tell clients they can cheat and send while the session is being
+# established. Its good practice with browserchannel to send messages while
+# the session is being set up - its faster for your users. But websockets
+# don't support that. We could pretend that connections open immediately (for
+# api compatibility), but if people bound UI to the connection state, it would
+# look wrong.
+# 
+# If you want a fast start, look for this flag.
+BCSocket.prototype['canSendWhileConnecting'] = BCSocket['canSendWhileConnecting'] = true
+
+# Flag to indicate native JSON support. The advantage of using browserchannel's
+# own JSON support is that it uses the closure library's JSON.stringify /
+# JSON.parse shims. These shims support old browsers.
+BCSocket.prototype['canSendJSON'] = BCSocket['canSendJSON'] = true
 
 BCSocket.prototype['CONNECTING'] = BCSocket['CONNECTING'] = BCSocket.CONNECTING = 0
 BCSocket.prototype['OPEN'] = BCSocket['OPEN'] = BCSocket.OPEN = 1
