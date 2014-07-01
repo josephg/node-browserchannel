@@ -83,17 +83,18 @@ errorMessages[goog.net.BrowserChannel.Error.BAD_RESPONSE] = 'Got a bad response 
 BCSocket = (url, options) ->
   self = this
 
-  # Url can be relative or absolute. (Though an absolute URL in the browser will have to match
-  # same origin policy)
+  # Url can be relative or absolute. (Though an absolute URL in the browser will
+  # have to match same origin policy)
   url ||= 'channel'
 
-  # Websocket urls are specified as ws:// or wss://. Replace the leading ws with http.
+  # Websocket urls are specified as ws:// or wss://. Replace the leading ws with
+  # http.
   url.replace /^ws/, 'http' if url.match /:\/\//
 
   options ||= {}
 
-  # Using websockets you can specify an array of protocol versions or a protocol version string.
-  # All that stuff is ignored.
+  # Using websockets you can specify an array of protocol versions or a protocol
+  # version string. All that stuff is ignored.
   options = {} if goog.isArray options or typeof options is 'string'
 
   reconnectTime = options['reconnectTime'] or 3000
@@ -115,9 +116,10 @@ BCSocket = (url, options) ->
     @['affinity'] = options['affinity'] || goog.string.getRandomString()
     extraParams[options['affinityParam']] = @['affinity']
 
-  # The channel starts CLOSED. When connect() is called, the channel moves into the CONNECTING
-  # state. If it connects, it moves to OPEN. If an error occurs (or an error occurs while the
-  # connection is connected), the socket moves to 'CLOSED' again.
+  # The channel starts CLOSED. When connect() is called, the channel moves into
+  # the CONNECTING state. If it connects, it moves to OPEN. If an error occurs
+  # (or an error occurs while the connection is connected), the socket moves to
+  # 'CLOSED' again.
   #
   # At any time, you can call close(), which disconnects the socket.
 
@@ -147,17 +149,19 @@ BCSocket = (url, options) ->
   handler = new goog.net.BrowserChannel.Handler()
 
   handler.channelOpened = (channel) ->
+    # Saved to this.lastSession so we can pull it off via options.prev.
     lastSession = session
     setState BCSocket.OPEN
-    fireCallback 'onopen'
+    fireCallback 'onopen', true
 
-  # If there's an error, the handler's channelError() method is called right before channelClosed().
-  # We'll cache the error so a 'disconnect' handler knows the disconnect reason.
+  # If there's an error, the handler's channelError() method is called right
+  # before channelClosed(). We'll cache the error so a 'disconnect' handler
+  # knows the disconnect reason.
   lastErrorCode = null
 
-  # This is called when the session has the final error explaining why its closing. It is
-  # called only once, just before channelClosed(). It is not called if the session is manually
-  # disconnected.
+  # This is called when the session has the final error explaining why its
+  # closing. It is called only once, just before channelClosed(). It is not
+  # called if the session is manually disconnected.
   handler.channelError = (channel, errCode) ->
     message = errorMessages[errCode]
     #console?.error "channelError #{errCode} : #{message} in state #{self.readyState}"
@@ -192,11 +196,11 @@ BCSocket = (url, options) ->
 
     # Hm.
     #
-    # I'm not sure what to do with this potentially-undelivered data. I think I'll toss it
-    # to the emitter and let that deal with it.
+    # I'm not sure what to do with this potentially-undelivered data. I think
+    # I'll toss it to the emitter and let that deal with it.
     #
-    # I'd rather call a callback on send(), like the server does. But I can't, because
-    # browserchannel's API isn't rich enough.
+    # I'd rather call a callback on send(), like the server does. But I can't,
+    # because browserchannel's API isn't rich enough.
 
     # Should handle server stop
     return if self.readyState is BCSocket.CLOSED
@@ -242,9 +246,10 @@ BCSocket = (url, options) ->
 
   # This reconnects if the current session is null.
   reconnect = ->
-    # It should be impossible for this function to be reentrant - the only places it
-    # can be called from are open() below and from the setTimeout above (which is disabled
-    # when reconnect is called). I'll just check it anyway though, because its sort of important.
+    # It should be impossible for this function to be reentrant - the only
+    # places it can be called from are open() below and from the setTimeout
+    # above (which is disabled when reconnect is called). I'll just check it
+    # anyway though, because its sort of important.
     throw new Error 'Reconnect() called from invalid state' if session
 
     setState BCSocket.CONNECTING
@@ -266,8 +271,8 @@ BCSocket = (url, options) ->
     session.connect "#{url}/test", "#{url}/bind", extraParams,
       lastSession?.getSessionId(), lastSession?.getLastArrayId()
 
-  # This isn't in the normal websocket interface. It reopens a previously closed websocket
-  # connection by reconnecting.
+  # This isn't in the normal websocket interface. It reopens a previously closed
+  # websocket connection by reconnecting.
   @['open'] = ->
     # If the session is already open, you should call close() first.
     throw new Error 'Already open' unless self.readyState is self.CLOSED
@@ -285,16 +290,19 @@ BCSocket = (url, options) ->
 
     setState BCSocket.CLOSING
 
-    # In theory, we don't transition to the CLOSED state until the server has received the disconnect
-    # message. But in practice, disconnect() results in channelClosed() being called immediately.
-    # The server is still notified, but only really as an afterthought.
+    # In theory, we don't transition to the CLOSED state until the server has
+    # received the disconnect message. But in practice, disconnect() results in
+    # channelClosed() being called immediately. The server is still notified,
+    # but only really as an afterthought.
     session.disconnect()
 
-  # TODO: Make @send to take a callback which is called when the message is either confirmed
-  # received or failed. The closure library has recently added a mechanism to do this.
+  # TODO: Make @send to take a callback which is called when the message is
+  # either confirmed received or failed. The closure library has recently added
+  # a mechanism to do this.
   #
-  # Note that you *can* send messages while the channel is connecting. Thats fine - any messages sent
-  # then should be sent with the initial payload.
+  # Note that you *can* send messages while the channel is connecting. Thats a
+  # *GOOD IDEA* - any messages sent then should be sent with the initial
+  # payload.
   @['sendMap'] = sendMap = (map) ->
     # This is the raw way to send messages. This will die if the session isn't connected.
     throw new Error 'Cannot send to a closed connection' if self.readyState in [BCSocket.CLOSING, BCSocket.CLOSED]

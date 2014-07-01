@@ -220,15 +220,16 @@ suite 'bcsocket', ->
         done() if received == num
 
       setTimeout =>
-        # Maps aren't actual JSON. They're just key-value pairs. I don't need to encode i as a string here,
-        # but thats now its sent anyway.
+        # Maps aren't actual JSON. They're just key-value pairs. I don't need to
+        # encode i as a string here, but thats now its sent anyway.
         @socket.sendMap {data:"#{i}", juuuuuuuuuuuuuuuuunnnnnnnnnk:'waaaazzzzzzuuuuuppppppp'} for i in [0...num]
       , 0
 
 
-  # I have 2 disconnect servers which have slightly different timing regarding when they call close()
-  # on the session. If close is called immediately, the initial bind request is rejected
-  # with a 403 response, before the client connects.
+  # I have 2 disconnect servers which have slightly different timing regarding
+  # when they call close() on the session. If close is called immediately, the
+  # initial bind request is rejected with a 403 response, before the client
+  # connects.
   test 'disconnecting immediately results in REQUEST_FAILED and a 403', (done) ->
     @socket = new BCSocket '/dc1', reconnect: no
 
@@ -241,7 +242,8 @@ suite 'bcsocket', ->
       onErrorCalled = yes
 
     @socket.onclose = ->
-      # This will be called because technically, the websocket does go into the close state!
+      # This will be called because technically, the websocket does go into the
+      # close state!
       #
       # This is exactly what websockets do.
       assert.ok onErrorCalled
@@ -253,8 +255,8 @@ suite 'bcsocket', ->
 
     onErrorCalled = no
     @socket.onerror = (message, errCode) =>
-      # The error code varies here, depending on some timing parameters & browser.
-      # I've seen NO_DATA, REQUEST_FAILED and UNKNOWN_SESSION_ID.
+      # The error code varies here, depending on some timing parameters &
+      # browser. I've seen NO_DATA, REQUEST_FAILED and UNKNOWN_SESSION_ID.
       assert.strictEqual @socket.readyState, @socket.CLOSING
       assert.ok message
       assert.ok errCode
