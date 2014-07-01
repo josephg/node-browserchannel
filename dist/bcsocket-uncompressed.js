@@ -89,7 +89,7 @@ function s(a, b) {
   c.prototype = b.prototype;
   a.pa = b.prototype;
   a.prototype = new c;
-  a.Gc = function(a, c, g) {
+  a.Hc = function(a, c, g) {
     var h = Array.prototype.slice.call(arguments, 2);
     return b.prototype[c].apply(a, h);
   };
@@ -838,7 +838,7 @@ f.mc = function(a, b, c) {
       } else {
         var u, K, v = !1;
         try {
-          u = c.lineNumber || c.Hc || "Not available";
+          u = c.lineNumber || c.Ic || "Not available";
         } catch (r) {
           u = "Not available", v = !0;
         }
@@ -1338,7 +1338,7 @@ function zc(a, b) {
   R.call(this);
   this.ea = a || 1;
   this.ra = b || l;
-  this.ib = p(this.Fc, this);
+  this.ib = p(this.Gc, this);
   this.sb = q();
 }
 s(zc, R);
@@ -1349,7 +1349,7 @@ f.setInterval = function(a) {
   this.ea = a;
   this.l && this.enabled ? (this.stop(), this.start()) : this.l && this.stop();
 };
-f.Fc = function() {
+f.Gc = function() {
   if (this.enabled) {
     var a = q() - this.sb;
     0 < a && a < 0.8 * this.ea ? this.l = this.ra.setTimeout(this.ib, this.ea - a) : (this.l && (this.ra.clearTimeout(this.l), this.l = null), this.dispatchEvent(Ac), this.enabled && (this.l = this.ra.setTimeout(this.ib, this.ea), this.sb = q()));
@@ -1740,8 +1740,8 @@ function ad(a, b) {
       return "Unknown error";
   }
 }
-var bd = {}, cd = {};
-function dd() {
+var bd = {}, dd = {};
+function ed() {
   return!y || y && 10 <= Ma;
 }
 f = U.prototype;
@@ -1754,24 +1754,24 @@ f.setTimeout = function(a) {
 f.bc = function(a) {
   this.ma = a;
 };
-function ed(a, b, c) {
+function fd(a, b, c) {
   a.sa = 1;
   a.U = H(b.n());
   a.X = c;
   a.Cb = !0;
-  fd(a, null);
+  gd(a, null);
 }
-function gd(a, b, c, d, e) {
+function hd(a, b, c, d, e) {
   a.sa = 1;
   a.U = H(b.n());
   a.X = null;
   a.Cb = c;
   e && (a.Zb = !1);
-  fd(a, d);
+  gd(a, d);
 }
-function fd(a, b) {
+function gd(a, b) {
   a.Da = q();
-  hd(a);
+  id(a);
   a.w = a.U.n();
   rb(a.w, "t", a.Ea);
   a.Ha = 0;
@@ -1790,7 +1790,7 @@ function fd(a, b) {
     c = {};
   }
   a.X ? (a.ta = "POST", c["Content-Type"] = "application/x-www-form-urlencoded", a.k.send(a.w, a.ta, a.X, c)) : (a.ta = "GET", a.Zb && !z && (c.Connection = "close"), a.k.send(a.w, a.ta, null, c));
-  a.b.H(id);
+  a.b.H(jd);
   if (d = a.X) {
     for (c = "", d = d.split("&"), e = 0;e < d.length;e++) {
       var g = d[e].split("=");
@@ -1814,7 +1814,7 @@ f.ec = function(a) {
     if (a == this.k) {
       a: {
         var b = T(this.k), c = this.k.ka, d = Sc(this.k);
-        if (!dd() || z && !A("420+")) {
+        if (!ed() || z && !A("420+")) {
           if (4 > b) {
             break a;
           }
@@ -1823,15 +1823,15 @@ f.ec = function(a) {
             break a;
           }
         }
-        this.$ || 4 != b || 7 == c || (8 == c || 0 >= d ? this.b.H(jd) : this.b.H(kd));
-        ld(this);
+        this.$ || 4 != b || 7 == c || (8 == c || 0 >= d ? this.b.H(kd) : this.b.H(ld));
+        md(this);
         var e = Sc(this.k);
         this.g = e;
         var g = Tc(this.k);
         g || this.a.debug("No response text for uri " + this.w + " status " + e);
         this.F = 200 == e;
         this.a.info("XMLHTTP RESP (" + this.B + ") [ attempt " + this.Ea + "]: " + this.ta + "\n" + this.w + "\n" + b + " " + e);
-        this.F ? (4 == b && V(this), this.Cb ? (md(this, b, g), Aa && this.F && 3 == b && (this.ob.Ra(this.Ta, Ac, this.Ac), this.Ta.start())) : (Ub(this.a, this.B, g, null), nd(this, g)), this.F && !this.$ && (4 == b ? this.b.la(this) : (this.F = !1, hd(this)))) : (400 == e && 0 < g.indexOf("Unknown SID") ? (this.q = 3, W(), this.a.Z("XMLHTTP Unknown SID (" + this.B + ")")) : (this.q = 0, W(), this.a.Z("XMLHTTP Bad status " + e + " (" + this.B + ")")), V(this), od(this));
+        this.F ? (4 == b && V(this), this.Cb ? (nd(this, b, g), Aa && this.F && 3 == b && (this.ob.Ra(this.Ta, Ac, this.Ac), this.Ta.start())) : (Ub(this.a, this.B, g, null), od(this, g)), this.F && !this.$ && (4 == b ? this.b.la(this) : (this.F = !1, id(this)))) : (400 == e && 0 < g.indexOf("Unknown SID") ? (this.q = 3, W(), this.a.Z("XMLHTTP Unknown SID (" + this.B + ")")) : (this.q = 0, W(), this.a.Z("XMLHTTP Bad status " + e + " (" + this.B + ")")), V(this), pd(this));
       }
     } else {
       this.a.Z("Called back with an unexpected xmlhttp");
@@ -1841,10 +1841,10 @@ f.ec = function(a) {
   } finally {
   }
 };
-function md(a, b, c) {
+function nd(a, b, c) {
   for (var d = !0;!a.$ && a.Ha < c.length;) {
-    var e = pd(a, c);
-    if (e == cd) {
+    var e = qd(a, c);
+    if (e == dd) {
       4 == b && (a.q = 4, W(), d = !1);
       Ub(a.a, a.B, null, "[Incomplete Response]");
       break;
@@ -1856,22 +1856,22 @@ function md(a, b, c) {
         d = !1;
         break;
       } else {
-        Ub(a.a, a.B, e, null), nd(a, e);
+        Ub(a.a, a.B, e, null), od(a, e);
       }
     }
   }
   4 == b && 0 == c.length && (a.q = 1, W(), d = !1);
   a.F = a.F && d;
-  d || (Ub(a.a, a.B, c, "[Invalid Chunked Response]"), V(a), od(a));
+  d || (Ub(a.a, a.B, c, "[Invalid Chunked Response]"), V(a), pd(a));
 }
 f.Ac = function() {
   var a = T(this.k), b = Tc(this.k);
-  this.Ha < b.length && (ld(this), md(this, a, b), this.F && 4 != a && hd(this));
+  this.Ha < b.length && (md(this), nd(this, a, b), this.F && 4 != a && id(this));
 };
-function pd(a, b) {
+function qd(a, b) {
   var c = a.Ha, d = b.indexOf("\n", c);
   if (-1 == d) {
-    return cd;
+    return dd;
   }
   c = Number(b.substring(c, d));
   if (isNaN(c)) {
@@ -1879,15 +1879,15 @@ function pd(a, b) {
   }
   d += 1;
   if (d + c > b.length) {
-    return cd;
+    return dd;
   }
   var e = b.substr(d, c);
   a.Ha = d + c;
   return e;
 }
-function qd(a, b) {
+function rd(a, b) {
   a.Da = q();
-  hd(a);
+  id(a);
   var c = b ? window.location.hostname : "";
   a.w = a.U.n();
   G(a.w, "DOMAIN", c);
@@ -1899,7 +1899,7 @@ function qd(a, b) {
     V(a);
     a.q = 7;
     W();
-    od(a);
+    pd(a);
     return;
   }
   var e = "<html><body>";
@@ -1915,7 +1915,7 @@ function qd(a, b) {
   a.K.parentWindow.document.body.appendChild(c);
   c.innerHTML = '<iframe src="' + a.w + '"></iframe>';
   a.a.info("TRIDENT REQ (" + a.B + ") [ attempt " + a.Ea + "]: GET\n" + a.w);
-  a.b.H(id);
+  a.b.H(jd);
 }
 f.yc = function(a) {
   Y(p(this.xc, this, a), 0);
@@ -1924,48 +1924,48 @@ f.xc = function(a) {
   if (!this.$) {
     var b = this.a;
     b.info("TRIDENT TEXT (" + this.B + "): " + Vb(b, a));
-    ld(this);
-    nd(this, a);
-    hd(this);
+    md(this);
+    od(this, a);
+    id(this);
   }
 };
 f.Ub = function(a) {
   Y(p(this.wc, this, a), 0);
 };
 f.wc = function(a) {
-  this.$ || (this.a.info("TRIDENT TEXT (" + this.B + "): " + a ? "success" : "failure"), V(this), this.F = a, this.b.la(this), this.b.H(rd));
+  this.$ || (this.a.info("TRIDENT TEXT (" + this.B + "): " + a ? "success" : "failure"), V(this), this.F = a, this.b.la(this), this.b.H(sd));
 };
 f.nc = function() {
-  ld(this);
+  md(this);
   this.b.la(this);
 };
 f.cancel = function() {
   this.$ = !0;
   V(this);
 };
-function hd(a) {
+function id(a) {
   a.xb = q() + a.qa;
-  sd(a, a.qa);
+  td(a, a.qa);
 }
-function sd(a, b) {
+function td(a, b) {
   if (null != a.ua) {
     throw Error("WatchDog timer not null");
   }
   a.ua = Y(p(a.zc, a), b);
 }
-function ld(a) {
+function md(a) {
   a.ua && (l.clearTimeout(a.ua), a.ua = null);
 }
 f.zc = function() {
   this.ua = null;
   var a = q();
-  0 <= a - this.xb ? (this.F && this.a.J("Received watchdog timeout even though request loaded successfully"), this.a.info("TIMEOUT: " + this.w), 2 != this.sa && this.b.H(jd), V(this), this.q = 2, W(), od(this)) : (this.a.Z("WatchDog timer called too early"), sd(this, this.xb - a));
+  0 <= a - this.xb ? (this.F && this.a.J("Received watchdog timeout even though request loaded successfully"), this.a.info("TIMEOUT: " + this.w), 2 != this.sa && this.b.H(kd), V(this), this.q = 2, W(), pd(this)) : (this.a.Z("WatchDog timer called too early"), td(this, this.xb - a));
 };
-function od(a) {
+function pd(a) {
   a.b.Lb() || a.$ || a.b.la(a);
 }
 function V(a) {
-  ld(a);
+  md(a);
   var b = a.Va;
   b && "function" == typeof b.Ja && b.Ja();
   a.Va = null;
@@ -1977,28 +1977,28 @@ function V(a) {
 f.Ib = function() {
   return this.q;
 };
-function nd(a, b) {
+function od(a, b) {
   try {
-    a.b.Rb(a, b), a.b.H(rd);
+    a.b.Rb(a, b), a.b.H(sd);
   } catch (c) {
     Wb(a.a, c, "Error in httprequest callback");
   }
 }
-;function td(a, b, c, d, e) {
+;function ud(a, b, c, d, e) {
   (new N).debug("TestLoadImageWithRetries: " + e);
   if (0 == d) {
     c(!1);
   } else {
     var g = e || 0;
     d--;
-    ud(a, b, function(e) {
+    vd(a, b, function(e) {
       e ? c(!0) : l.setTimeout(function() {
-        td(a, b, c, d, g);
+        ud(a, b, c, d, g);
       }, g);
     });
   }
 }
-function ud(a, b, c) {
+function vd(a, b, c) {
   function d(a, b) {
     return function() {
       try {
@@ -2022,12 +2022,12 @@ function ud(a, b, c) {
   }, b);
   g.src = a;
 }
-;function vd(a, b) {
+;function wd(a, b) {
   this.b = a;
   this.a = b;
   this.P = new Yb(0, !0);
 }
-f = vd.prototype;
+f = wd.prototype;
 f.v = null;
 f.A = null;
 f.Wa = !1;
@@ -2047,21 +2047,21 @@ f.ac = function(a) {
 };
 f.kb = function(a) {
   this.I = a;
-  a = wd(this.b, this.I);
+  a = xd(this.b, this.I);
   W();
   this.cc = q();
   var b = this.b.Gb;
-  null != b ? (this.L = this.b.correctHostPrefix(b[0]), (this.va = b[1]) ? (this.c = 1, xd(this)) : (this.c = 2, yd(this))) : (rb(a, "MODE", "init"), this.A = new U(this, this.a, void 0, void 0, void 0), this.A.S(this.v), gd(this.A, a, !1, null, !0), this.c = 0);
+  null != b ? (this.L = this.b.correctHostPrefix(b[0]), (this.va = b[1]) ? (this.c = 1, yd(this)) : (this.c = 2, zd(this))) : (rb(a, "MODE", "init"), this.A = new U(this, this.a, void 0, void 0, void 0), this.A.S(this.v), hd(this.A, a, !1, null, !0), this.c = 0);
 };
-function xd(a) {
-  var b = zd(a.b, a.va, "/mail/images/cleardot.gif");
+function yd(a) {
+  var b = Ad(a.b, a.va, "/mail/images/cleardot.gif");
   H(b);
-  td(b.toString(), 5E3, p(a.kc, a), 3, 2E3);
-  a.H(id);
+  ud(b.toString(), 5E3, p(a.kc, a), 3, 2E3);
+  a.H(jd);
 }
 f.kc = function(a) {
   if (a) {
-    this.c = 2, yd(this);
+    this.c = 2, zd(this);
   } else {
     W();
     var b = this.b;
@@ -2069,23 +2069,23 @@ f.kc = function(a) {
     b.g = b.V.g;
     Z(b, 9);
   }
-  a && this.H(kd);
+  a && this.H(ld);
 };
-function yd(a) {
+function zd(a) {
   a.a.debug("TestConnection: starting stage 2");
   var b = a.b.Dc;
   if (null != b) {
-    a.a.debug("TestConnection: skipping stage 2, precomputed result is " + b ? "Buffered" : "Unbuffered"), W(), b ? (W(), Ad(a.b, a, !1)) : (W(), Ad(a.b, a, !0));
+    a.a.debug("TestConnection: skipping stage 2, precomputed result is " + b ? "Buffered" : "Unbuffered"), W(), b ? (W(), Bd(a.b, a, !1)) : (W(), Bd(a.b, a, !0));
   } else {
-    if (a.A = new U(a, a.a, void 0, void 0, void 0), a.A.S(a.v), b = Bd(a.b, a.L, a.I), W(), dd()) {
-      rb(b, "TYPE", "xmlhttp"), gd(a.A, b, !1, a.L, !1);
+    if (a.A = new U(a, a.a, void 0, void 0, void 0), a.A.S(a.v), b = Cd(a.b, a.L, a.I), W(), ed()) {
+      rb(b, "TYPE", "xmlhttp"), hd(a.A, b, !1, a.L, !1);
     } else {
       rb(b, "TYPE", "html");
       var c = a.A;
       a = Boolean(a.L);
       c.sa = 3;
       c.U = H(b.n());
-      qd(c, a);
+      rd(c, a);
     }
   }
 }
@@ -2107,13 +2107,13 @@ f.Rb = function(a, b) {
         var c = this.P.parse(b);
       } catch (d) {
         Wb(this.a, d);
-        Cd(this.b, this);
+        Dd(this.b, this);
         return;
       }
       this.L = this.b.correctHostPrefix(c[0]);
       this.va = c[1];
     } else {
-      this.a.debug("TestConnection: Null responseText"), Cd(this.b, this);
+      this.a.debug("TestConnection: Null responseText"), Dd(this.b, this);
     }
   } else {
     if (2 == this.c) {
@@ -2121,8 +2121,8 @@ f.Rb = function(a, b) {
         W(), this.rb = q();
       } else {
         if ("11111" == b) {
-          if (W(), this.Wa = !0, this.La = q(), c = this.La - this.cc, dd() || 500 > c) {
-            this.g = 200, this.A.cancel(), this.a.debug("Test connection succeeded; using streaming connection"), W(), Ad(this.b, this, !0);
+          if (W(), this.Wa = !0, this.La = q(), c = this.La - this.cc, ed() || 500 > c) {
+            this.g = 200, this.A.cancel(), this.a.debug("Test connection succeeded; using streaming connection"), W(), Bd(this.b, this, !0);
           }
         } else {
           W(), this.La = this.rb = q(), this.Wa = !1;
@@ -2134,15 +2134,15 @@ f.Rb = function(a, b) {
 f.la = function() {
   this.g = this.A.g;
   if (!this.A.F) {
-    this.a.debug("TestConnection: request failed, in state " + this.c), 0 == this.c ? W() : 2 == this.c && W(), Cd(this.b, this);
+    this.a.debug("TestConnection: request failed, in state " + this.c), 0 == this.c ? W() : 2 == this.c && W(), Dd(this.b, this);
   } else {
     if (0 == this.c) {
-      this.a.debug("TestConnection: request complete for initial check"), this.va ? (this.c = 1, xd(this)) : (this.c = 2, yd(this));
+      this.a.debug("TestConnection: request complete for initial check"), this.va ? (this.c = 1, yd(this)) : (this.c = 2, zd(this));
     } else {
       if (2 == this.c) {
         this.a.debug("TestConnection: request complete for stage 2");
         var a = !1;
-        (a = dd() ? this.Wa : 200 > this.rb - this.La ? !1 : !0) ? (this.a.debug("Test connection succeeded; using streaming connection"), W(), Ad(this.b, this, !0)) : (this.a.debug("Test connection failed; not using streaming"), W(), Ad(this.b, this, !1));
+        (a = ed() ? this.Wa : 200 > this.rb - this.La ? !1 : !0) ? (this.a.debug("Test connection succeeded; using streaming connection"), W(), Bd(this.b, this, !0)) : (this.a.debug("Test connection failed; not using streaming"), W(), Bd(this.b, this, !1));
       }
     }
   }
@@ -2156,9 +2156,9 @@ f.isActive = function() {
 f.H = function(a) {
   this.b.H(a);
 };
-function Dd(a, b, c) {
+function Ed(a, b, c) {
   this.Bb = a || null;
-  this.c = Ed;
+  this.c = Fd;
   this.t = [];
   this.Q = [];
   this.a = new N;
@@ -2166,11 +2166,11 @@ function Dd(a, b, c) {
   this.Gb = b || null;
   this.Dc = null != c ? c : null;
 }
-function Fd(a, b) {
+function Gd(a, b) {
   this.Ob = a;
   this.map = b;
 }
-f = Dd.prototype;
+f = Ed.prototype;
 f.v = null;
 f.xa = null;
 f.p = null;
@@ -2202,23 +2202,23 @@ f.Hb = 2E4;
 f.ma = 0;
 f.ab = !1;
 f.ia = 8;
-var Ed = 1, Gd = new R;
-function Hd(a) {
+var Fd = 1, Hd = new R;
+function Id(a) {
   Q.call(this, "statevent", a);
 }
-s(Hd, Q);
-function Id(a, b) {
+s(Id, Q);
+function Jd(a, b) {
   Q.call(this, "timingevent", a);
   this.size = b;
 }
-s(Id, Q);
-var id = 1, kd = 2, jd = 3, rd = 4;
-function Jd(a) {
+s(Jd, Q);
+var jd = 1, ld = 2, kd = 3, sd = 4;
+function Kd(a) {
   Q.call(this, "serverreachability", a);
 }
-s(Jd, Q);
+s(Kd, Q);
 var Xb = "y2f%";
-f = Dd.prototype;
+f = Ed.prototype;
 f.kb = function(a, b, c, d, e) {
   this.a.debug("connect()");
   W();
@@ -2226,17 +2226,17 @@ f.kb = function(a, b, c, d, e) {
   this.xa = c || {};
   d && void 0 !== e && (this.xa.OSID = d, this.xa.OAID = e);
   this.a.debug("connectTest_()");
-  Kd(this) && (this.V = new vd(this, this.a), this.V.S(this.v), this.V.ac(this.P), this.V.kb(a));
+  Ld(this) && (this.V = new wd(this, this.a), this.V.S(this.v), this.V.ac(this.P), this.V.kb(a));
 };
 f.disconnect = function() {
   this.a.debug("disconnect()");
-  Ld(this);
+  Md(this);
   if (3 == this.c) {
     var a = this.Ba++, b = this.Ma.n();
     G(b, "SID", this.Y);
     G(b, "RID", a);
     G(b, "TYPE", "terminate");
-    Md(this, b);
+    Nd(this, b);
     a = new U(this, this.a, this.Y, a, void 0);
     a.sa = 2;
     a.U = H(b.n());
@@ -2244,15 +2244,15 @@ f.disconnect = function() {
     b.src = a.U;
     b.onload = b.onerror = p(a.nc, a);
     a.Da = q();
-    hd(a);
+    id(a);
   }
-  Nd(this);
+  Od(this);
 };
-function Ld(a) {
+function Md(a) {
   a.V && (a.V.abort(), a.V = null);
   a.i && (a.i.cancel(), a.i = null);
   a.M && (l.clearTimeout(a.M), a.M = null);
-  Od(a);
+  Pd(a);
   a.p && (a.p.cancel(), a.p = null);
   a.G && (l.clearTimeout(a.G), a.G = null);
 }
@@ -2268,14 +2268,14 @@ f.Lb = function() {
 f.ac = function(a) {
   this.P = a;
 };
-function Pd(a) {
+function Qd(a) {
   a.p || a.G || (a.G = Y(p(a.Tb, a), 0), a.ba = 0);
 }
 f.Tb = function(a) {
   this.G = null;
   this.a.debug("startForwardChannel_");
-  if (Kd(this)) {
-    if (this.c == Ed) {
+  if (Ld(this)) {
+    if (this.c == Fd) {
       if (a) {
         this.a.J("Not supposed to retry the open");
       } else {
@@ -2284,34 +2284,34 @@ f.Tb = function(a) {
         a = this.Ba++;
         var b = new U(this, this.a, "", a, void 0);
         b.S(this.v);
-        var c = Qd(this), d = this.Ma.n();
+        var c = Rd(this), d = this.Ma.n();
         G(d, "RID", a);
         this.Bb && G(d, "CVER", this.Bb);
-        Md(this, d);
-        ed(b, d, c);
+        Nd(this, d);
+        fd(b, d, c);
         this.p = b;
         this.c = 2;
       }
     } else {
-      3 == this.c && (a ? Rd(this, a) : 0 == this.t.length ? this.a.debug("startForwardChannel_ returned: nothing to send") : this.p ? this.a.J("startForwardChannel_ returned: connection already in progress") : (Rd(this), this.a.debug("startForwardChannel_ finished, sent request")));
+      3 == this.c && (a ? Sd(this, a) : 0 == this.t.length ? this.a.debug("startForwardChannel_ returned: nothing to send") : this.p ? this.a.J("startForwardChannel_ returned: connection already in progress") : (Sd(this), this.a.debug("startForwardChannel_ finished, sent request")));
     }
   }
 };
-function Rd(a, b) {
+function Sd(a, b) {
   var c, d;
-  b ? 6 < a.ia ? (a.t = a.Q.concat(a.t), a.Q.length = 0, c = a.Ba - 1, d = Qd(a)) : (c = b.B, d = b.X) : (c = a.Ba++, d = Qd(a));
+  b ? 6 < a.ia ? (a.t = a.Q.concat(a.t), a.Q.length = 0, c = a.Ba - 1, d = Rd(a)) : (c = b.B, d = b.X) : (c = a.Ba++, d = Rd(a));
   var e = a.Ma.n();
   G(e, "SID", a.Y);
   G(e, "RID", c);
   G(e, "AID", a.za);
-  Md(a, e);
+  Nd(a, e);
   c = new U(a, a.a, a.Y, c, a.ba + 1);
   c.S(a.v);
   c.setTimeout(Math.round(0.5 * a.Hb) + Math.round(0.5 * a.Hb * Math.random()));
   a.p = c;
-  ed(c, e, d);
+  fd(c, e, d);
 }
-function Md(a, b) {
+function Nd(a, b) {
   if (a.e) {
     var c = a.e.getAdditionalParams(a);
     c && D(c, function(a, c) {
@@ -2319,7 +2319,7 @@ function Md(a, b) {
     });
   }
 }
-function Qd(a) {
+function Rd(a) {
   var b = Math.min(a.t.length, 1E3), c = ["count=" + b], d;
   6 < a.ia && 0 < b ? (d = a.t[0].Ob, c.push("ofs=" + d)) : d = 0;
   for (var e = 0;e < b;e++) {
@@ -2335,10 +2335,10 @@ function Qd(a) {
   a.Q = a.Q.concat(a.t.splice(0, b));
   return c.join("&");
 }
-function Sd(a) {
+function Td(a) {
   a.i || a.M || (a.yb = 1, a.M = Y(p(a.Sb, a), 0), a.ha = 0);
 }
-function Td(a) {
+function Ud(a) {
   if (a.i || a.M) {
     return a.a.J("Request already in progress"), !1;
   }
@@ -2347,13 +2347,13 @@ function Td(a) {
   }
   a.a.debug("Going to retry GET");
   a.yb++;
-  a.M = Y(p(a.Sb, a), Ud(a, a.ha));
+  a.M = Y(p(a.Sb, a), Vd(a, a.ha));
   a.ha++;
   return!0;
 }
 f.Sb = function() {
   this.M = null;
-  if (Kd(this)) {
+  if (Ld(this)) {
     this.a.debug("Creating new HttpRequest");
     this.i = new U(this, this.a, this.Y, "rpc", this.yb);
     this.i.S(this.v);
@@ -2363,20 +2363,20 @@ f.Sb = function() {
     G(a, "SID", this.Y);
     G(a, "CI", this.wb ? "0" : "1");
     G(a, "AID", this.za);
-    Md(this, a);
-    if (dd()) {
-      G(a, "TYPE", "xmlhttp"), gd(this.i, a, !0, this.L, !1);
+    Nd(this, a);
+    if (ed()) {
+      G(a, "TYPE", "xmlhttp"), hd(this.i, a, !0, this.L, !1);
     } else {
       G(a, "TYPE", "html");
       var b = this.i, c = Boolean(this.L);
       b.sa = 3;
       b.U = H(a.n());
-      qd(b, c);
+      rd(b, c);
     }
     this.a.debug("New Request created");
   }
 };
-function Kd(a) {
+function Ld(a) {
   if (a.e) {
     var b = a.e.okToMakeRequest(a);
     if (0 != b) {
@@ -2385,16 +2385,16 @@ function Kd(a) {
   }
   return!0;
 }
-function Ad(a, b, c) {
+function Bd(a, b, c) {
   a.a.debug("Test Connection Finished");
   a.wb = a.gc && c;
   a.g = b.g;
   a.a.debug("connectChannel_()");
-  a.lc(Ed, 0);
-  a.Ma = wd(a, a.I);
-  Pd(a);
+  a.lc(Fd, 0);
+  a.Ma = xd(a, a.I);
+  Qd(a);
 }
-function Cd(a, b) {
+function Dd(a, b) {
   a.a.debug("Test Connection Failed");
   a.g = b.g;
   Z(a, 2);
@@ -2418,14 +2418,14 @@ f.Rb = function(a, b) {
               } else {
                 if (this.i) {
                   if (this.i.Da + 3E3 < this.p.Da) {
-                    Od(this), this.i.cancel(), this.i = null;
+                    Pd(this), this.i.cancel(), this.i = null;
                   } else {
                     break a;
                   }
                 } else {
                   this.a.Z("We do not have a BackChannel established");
                 }
-                Td(this);
+                Ud(this);
                 W();
               }
             }
@@ -2439,13 +2439,13 @@ f.Rb = function(a, b) {
         b != Xb && (this.a.debug("Bad data returned - missing/invald magic cookie"), Z(this, 11));
       }
     } else {
-      if (this.i == a && Od(this), !/^[\s\xa0]*$/.test(b)) {
+      if (this.i == a && Pd(this), !/^[\s\xa0]*$/.test(b)) {
         c = this.P.parse(b);
         for (var e = this.e && this.e.channelHandleMultipleArrays ? [] : null, g = 0;g < c.length;g++) {
           var h = c[g];
           this.za = h[0];
           h = h[1];
-          2 == this.c ? "c" == h[0] ? (this.Y = h[1], this.L = this.correctHostPrefix(h[2]), h = h[3], this.ia = null != h ? h : 6, this.c = 3, this.e && this.e.channelOpened(this), this.zb = Bd(this, this.L, this.I), Sd(this)) : "stop" == h[0] && Z(this, 7) : 3 == this.c && ("stop" == h[0] ? (e && 0 != e.length && (this.e.channelHandleMultipleArrays(this, e), e.length = 0), Z(this, 7)) : "noop" != h[0] && (e ? e.push(h) : this.e && this.e.channelHandleArray(this, h)), this.ha = 0);
+          2 == this.c ? "c" == h[0] ? (this.Y = h[1], this.L = this.correctHostPrefix(h[2]), h = h[3], this.ia = null != h ? h : 6, this.c = 3, this.e && this.e.channelOpened(this), this.zb = Cd(this, this.L, this.I), Td(this)) : "stop" == h[0] && Z(this, 7) : 3 == this.c && ("stop" == h[0] ? (e && 0 != e.length && (this.e.channelHandleMultipleArrays(this, e), e.length = 0), Z(this, 7)) : "noop" != h[0] && (e ? e.push(h) : this.e && this.e.channelHandleArray(this, h)), this.ha = 0);
         }
         e && 0 != e.length && this.e.channelHandleMultipleArrays(this, e);
       }
@@ -2456,16 +2456,16 @@ f.correctHostPrefix = function(a) {
   return this.hc ? this.e ? this.e.correctHostPrefix(a) : a : null;
 };
 f.tc = function() {
-  null != this.aa && (this.aa = null, this.i.cancel(), this.i = null, Td(this), W());
+  null != this.aa && (this.aa = null, this.i.cancel(), this.i = null, Ud(this), W());
 };
-function Od(a) {
+function Pd(a) {
   null != a.aa && (l.clearTimeout(a.aa), a.aa = null);
 }
 f.la = function(a) {
   this.a.debug("Request complete");
   var b;
   if (this.i == a) {
-    Od(this), this.i = null, b = 2;
+    Pd(this), this.i = null, b = 2;
   } else {
     if (this.p == a) {
       this.p = null, b = 1;
@@ -2476,7 +2476,7 @@ f.la = function(a) {
   this.g = a.g;
   if (0 != this.c) {
     if (a.F) {
-      1 == b ? (q(), Gd.dispatchEvent(new Id(Gd, a.X ? a.X.length : 0)), Pd(this), this.Q.length = 0) : Sd(this);
+      1 == b ? (q(), Hd.dispatchEvent(new Jd(Hd, a.X ? a.X.length : 0)), Qd(this), this.Q.length = 0) : Td(this);
     } else {
       var c = a.Ib();
       if (3 == c || 7 == c || 0 == c && 0 < this.g) {
@@ -2485,9 +2485,9 @@ f.la = function(a) {
         this.a.debug("Maybe retrying, last error: " + ad(c, this.g));
         var d;
         if (d = 1 == b) {
-          this.p || this.G ? (this.a.J("Request already in progress"), d = !1) : this.c == Ed || this.ba >= (this.Ka ? 0 : this.pb) ? d = !1 : (this.a.debug("Going to retry POST"), this.G = Y(p(this.Tb, this, a), Ud(this, this.ba)), this.ba++, d = !0);
+          this.p || this.G ? (this.a.J("Request already in progress"), d = !1) : this.c == Fd || this.ba >= (this.Ka ? 0 : this.pb) ? d = !1 : (this.a.debug("Going to retry POST"), this.G = Y(p(this.Tb, this, a), Vd(this, this.ba)), this.ba++, d = !0);
         }
-        if (d || 2 == b && Td(this)) {
+        if (d || 2 == b && Ud(this)) {
           return;
         }
         this.a.debug("Exceeded max number of retries");
@@ -2512,7 +2512,7 @@ f.la = function(a) {
     }
   }
 };
-function Ud(a, b) {
+function Vd(a, b) {
   var c = a.ic + Math.floor(Math.random() * a.Cc);
   a.isActive() || (a.a.debug("Inactive channel"), c *= 2);
   return c * b;
@@ -2527,25 +2527,25 @@ function Z(a, b) {
   if (2 == b || 9 == b) {
     var c = null;
     a.e && (c = a.e.getNetworkTestImageUri(a));
-    var d = p(a.Ec, a);
+    var d = p(a.Fc, a);
     c || (c = new E("//www.google.com/images/cleardot.gif"), H(c));
-    ud(c.toString(), 1E4, d);
+    vd(c.toString(), 1E4, d);
   } else {
     W();
   }
-  Vd(a, b);
+  Wd(a, b);
 }
-f.Ec = function(a) {
-  a ? (this.a.info("Successfully pinged google.com"), W()) : (this.a.info("Failed to ping google.com"), W(), Vd(this, 8));
+f.Fc = function(a) {
+  a ? (this.a.info("Successfully pinged google.com"), W()) : (this.a.info("Failed to ping google.com"), W(), Wd(this, 8));
 };
-function Vd(a, b) {
+function Wd(a, b) {
   a.a.debug("HttpChannel: error - " + b);
   a.c = 0;
   a.e && a.e.channelError(a, b);
-  Nd(a);
-  Ld(a);
+  Od(a);
+  Md(a);
 }
-function Nd(a) {
+function Od(a) {
   a.c = 0;
   a.g = -1;
   if (a.e) {
@@ -2560,17 +2560,17 @@ function Nd(a) {
     }
   }
 }
-function wd(a, b) {
-  var c = zd(a, null, b);
+function xd(a, b) {
+  var c = Ad(a, null, b);
   a.a.debug("GetForwardChannelUri: " + c);
   return c;
 }
-function Bd(a, b, c) {
-  b = zd(a, a.$a() ? b : null, c);
+function Cd(a, b, c) {
+  b = Ad(a, a.$a() ? b : null, c);
   a.a.debug("GetBackChannelUri: " + b);
   return b;
 }
-function zd(a, b, c) {
+function Ad(a, b, c) {
   var d = tb(c);
   if ("" != d.ja) {
     b && gb(d, b + "." + d.ja), hb(d, d.Ca);
@@ -2581,7 +2581,7 @@ function zd(a, b, c) {
     G(d, b, a);
   });
   G(d, "VER", a.ia);
-  Md(a, d);
+  Nd(a, d);
   return d;
 }
 f.lb = function(a) {
@@ -2604,17 +2604,17 @@ function Y(a, b) {
   }, b);
 }
 f.H = function() {
-  Gd.dispatchEvent(new Jd(Gd));
+  Hd.dispatchEvent(new Kd(Hd));
 };
 function W() {
-  Gd.dispatchEvent(new Hd(Gd));
+  Hd.dispatchEvent(new Id(Hd));
 }
 f.$a = function() {
-  return this.ab || !dd();
+  return this.ab || !ed();
 };
-function Wd() {
+function Xd() {
 }
-f = Wd.prototype;
+f = Xd.prototype;
 f.channelHandleMultipleArrays = null;
 f.okToMakeRequest = function() {
   return 0;
@@ -2641,10 +2641,13 @@ f.badMapError = function() {
 f.correctHostPrefix = function(a) {
   return a;
 };
-var $, Xd, Yd = [].slice;
-Xd = {0:"Ok", 4:"User is logging out", 6:"Unknown session ID", 7:"Stopped by server", 8:"General network error", 2:"Request failed", 9:"Blocked by a network administrator", 5:"No data from server", 10:"Got bad data from the server", 11:"Got a bad response from the server"};
+var $, Yd;
+Yd = {0:"Ok", 4:"User is logging out", 6:"Unknown session ID", 7:"Stopped by server", 8:"General network error", 2:"Request failed", 9:"Blocked by a network administrator", 5:"No data from server", 10:"Got bad data from the server", 11:"Got a bad response from the server"};
 $ = function(a, b) {
-  var c, d, e, g, h, k, u, K, v, r, Ka, w, X;
+  var c, d, e, g, h, k, u, K, v, r, Ka, w, X, cd;
+  if (!(this instanceof $)) {
+    return new $(a, b);
+  }
   r = this;
   a || (a = "channel");
   a.match(/:\/\//) && a.replace(/^ws/, "http");
@@ -2659,18 +2662,15 @@ $ = function(a, b) {
   };
   X(this.CLOSED);
   w = null;
-  k = b.Ic;
-  e = function() {
-    var a, b;
-    b = arguments[0];
-    a = 2 <= arguments.length ? Yd.call(arguments, 1) : [];
+  k = null != (cd = b.prev) ? cd.Ec : void 0;
+  e = function(a, b, c, d, e) {
     try {
-      return "function" === typeof r[b] ? r[b].apply(r, a) : void 0;
-    } catch (c) {
-      throw a = c, "undefined" !== typeof console && null !== console && console.error(a.stack), a;
+      return "function" === typeof r[a] ? r[a](c, d, e) : void 0;
+    } catch (g) {
+      throw "undefined" !== typeof console && null !== console && console.error(g.stack), g;
     }
   };
-  g = new Wd;
+  g = new Xd;
   g.channelOpened = function() {
     k = w;
     X($.OPEN);
@@ -2679,31 +2679,20 @@ $ = function(a, b) {
   h = null;
   g.channelError = function(a, b) {
     var c;
-    c = Xd[b];
+    c = Yd[b];
     h = b;
     r.readyState !== $.CLOSED && X($.hb);
-    try {
-      return e("onerror", c, b);
-    } catch (d) {
-    }
+    return e("onerror", 0, c, b);
   };
   v = null;
   g.channelClosed = function(a, c, d) {
     var g;
     if (r.readyState !== $.CLOSED) {
-      w = null;
-      a = h ? Xd[h] : "Closed";
-      X($.CLOSED);
-      b.reconnect && 7 !== h && 0 !== h && (g = 6 === h ? 0 : K, clearTimeout(v), v = setTimeout(u, g));
-      try {
-        e("onclose", a, c, d);
-      } catch (k) {
-      }
-      return h = null;
+      return w = null, a = h ? Yd[h] : "Closed", X($.CLOSED), b.reconnect && 7 !== h && 0 !== h && (g = 6 === h ? 0 : K, clearTimeout(v), v = setTimeout(u, g)), e("onclose", 0, a, c, d), h = null;
     }
   };
   g.channelHandleArray = function(a, b) {
-    return e("onmessage", {type:"message", data:b});
+    return e("onmessage", 0, {type:"message", data:b});
   };
   u = function() {
     if (w) {
@@ -2712,7 +2701,7 @@ $ = function(a, b) {
     X($.CONNECTING);
     e("onconnecting");
     clearTimeout(v);
-    w = new Dd(b.appVersion, null != k ? k.Gb : void 0);
+    r.Ec = w = new Ed(b.appVersion, null != k ? k.Gb : void 0);
     b.crossDomainXhr && (w.ab = !0);
     w.e = g;
     c && w.S(c);
@@ -2740,23 +2729,23 @@ $ = function(a, b) {
   };
   this.sendMap = Ka = function(a) {
     var b;
-    if ((b = r.readyState) === $.hb || b === $.CLOSED) {
-      throw Error("Cannot send to a closed connection");
+    if ((b = r.readyState) !== $.hb && b !== $.CLOSED) {
+      b = w;
+      if (0 == b.c) {
+        throw Error("Invalid operation: sending map when state is closed");
+      }
+      1E3 == b.t.length && b.a.J("Already have 1000 queued maps upon queueing " + yb(a));
+      b.t.push(new Gd(b.sc++, a));
+      2 != b.c && 3 != b.c || Qd(b);
     }
-    b = w;
-    if (0 == b.c) {
-      throw Error("Invalid operation: sending map when state is closed");
-    }
-    1E3 == b.t.length && b.a.J("Already have 1000 queued maps upon queueing " + yb(a));
-    b.t.push(new Fd(b.sc++, a));
-    2 != b.c && 3 != b.c || Pd(b);
   };
   this.send = function(a) {
     return "string" === typeof a ? Ka({_S:a}) : Ka({JSON:yb(a)});
   };
   u();
-  return this;
 };
+$.prototype.canSendWhileConnecting = $.canSendWhileConnecting = !0;
+$.prototype.canSendJSON = $.canSendJSON = !0;
 $.prototype.CONNECTING = $.CONNECTING = $.CONNECTING = 0;
 $.prototype.OPEN = $.OPEN = $.OPEN = 1;
 $.prototype.CLOSING = $.CLOSING = $.hb = 2;

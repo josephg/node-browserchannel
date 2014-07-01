@@ -259,7 +259,6 @@ BCSession = function(address, query, headers, options) {
   this._queueArray(['c', this.id, getHostPrefix(options), 8]);
   this._mapBuffer = order(0, false);
   this._ridBuffer = order(query.RID, true);
-  this._stream = null;
 };
 
 (function() {
