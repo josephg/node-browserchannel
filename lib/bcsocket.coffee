@@ -136,6 +136,9 @@ BCSocket = (url, options) ->
   # successfully connected. This ghosts the previous session if the server
   # thinks its still around. If you aren't using BCSocket's reconnection
   # support, pass the old BCSocket object in to options.prev.
+  #
+  # It might be more correct here to use lastSession instead (which would mean
+  # we would only use a session after it has been opened).
   lastSession = options['prev']?.session
 
   # Closure has an annoyingly complicated logging system which by default will
@@ -156,7 +159,6 @@ BCSocket = (url, options) ->
   handler = new goog.net.BrowserChannel.Handler()
 
   handler.channelOpened = (channel) ->
-    # Saved to this.lastSession so we can pull it off via options.prev.
     lastSession = session
     setState BCSocket.OPEN
     fireCallback 'onopen', true
@@ -212,8 +214,8 @@ BCSocket = (url, options) ->
     # Should handle server stop
     return if self.readyState is BCSocket.CLOSED
 
-    # And once channelClosed is called, we won't get any more events from the session. So things like send()
-    # should throw exceptions.
+    # And once channelClosed is called, we won't get any more events from the
+    # session. So things like send() should throw exceptions.
     session = null
 
     message = if lastErrorCode then errorMessages[lastErrorCode] else 'Closed'
@@ -289,8 +291,8 @@ BCSocket = (url, options) ->
   @['close'] = ->
     clearTimeout reconnectTimer
 
-    # I'm abusing lastErrorCode here so in the channelClosed handler I can make sure we don't
-    # try to reconnect.
+    # I'm abusing lastErrorCode here so in the channelClosed handler I can make
+    # sure we don't try to reconnect.
     lastErrorCode = goog.net.BrowserChannel.Error.OK
 
     return if self.readyState is BCSocket.CLOSED
@@ -327,6 +329,16 @@ BCSocket = (url, options) ->
     else
       sendMap 'JSON': goog.json.serialize message
   
+  # Flag to tell clients they can cheat and send while the session is being
+  # established. Its good practice with browserchannel to send messages while
+  # the session is being set up - its faster for your users. But websockets
+  # don't support that. We could pretend that connections open immediately (for
+  # api compatibility), but if people bound UI to the connection state, it would
+  # look wrong.
+  # 
+  # If you want a fast start, look for this flag.
+  @['sendWhileConnecting'] = true
+
   # Websocket connections are automatically opened.
   reconnect()
 
