@@ -132,15 +132,22 @@ BCSocket = (url, options) ->
   # The current browserchannel session we're connected through.
   session = null
 
-  # When we reconnect, we'll pass the SID and AID from the previous time we successfully connected.
-  lastSession = options.prev
+  # When we reconnect, we'll pass the SID and AID from the previous time we
+  # successfully connected. This ghosts the previous session if the server
+  # thinks its still around. If you aren't using BCSocket's reconnection
+  # support, pass the old BCSocket object in to options.prev.
+  lastSession = options['prev']?.session
 
-  # Closure has an annoyingly complicated logging system which by default will silently capture &
-  # discard any errors thrown in callbacks. I could enable the logging infrastructure (above), but
-  # I prefer to just log errors as needed.
-  fireCallback = (name, args...) ->
+  # Closure has an annoyingly complicated logging system which by default will
+  # silently capture & discard any errors thrown in callbacks. I could enable
+  # the logging infrastructure (above), but I prefer to just log errors as
+  # needed.
+  #
+  # The callback takes three arguments because thats the max any event needs to
+  # pass into its callback.
+  fireCallback = (name, shouldThrow, a, b, c) ->
     try
-      self[name]? args...
+      self[name]? a, b, c
     catch e
       console?.error e.stack
       throw e
@@ -171,15 +178,15 @@ BCSocket = (url, options) ->
     # passing through here even when you're not connected.
     setState BCSocket.CLOSING unless self.readyState is BCSocket.CLOSED
 
-    # I'm not 100% sure what websockets do if there's an error like this. I'm going to assume it has the
-    # same behaviour as browserchannel - that is, onclose() is always called if a connection closes, and
-    # onerror is called whenever an error occurs.
+    # I'm not 100% sure what websockets do if there's an error like this. I'm
+    # going to assume it has the same behaviour as browserchannel - that is,
+    # onclose() is always called if a connection closes, and onerror is called
+    # whenever an error occurs.
  
     # If fireCallback throws, channelClosed (below) never gets called, which in
-    # turn causes the connection to never reconnect. Eat the exceptions so that
-    # doesn't happen.
-    try
-      fireCallback 'onerror', message, errCode
+    # turn causes the connection to never reconnect. We'll eat the exceptions so
+    # that doesn't happen.
+    fireCallback 'onerror', false, message, errCode
 
   reconnectTimer = null
 
@@ -213,23 +220,23 @@ BCSocket = (url, options) ->
 
     setState BCSocket.CLOSED
 
-    # If the error message is STOP, we won't reconnect. That means the server has explicitly requested
-    # the client give up trying to reconnect due to some error.
+    # If the error message is STOP, we won't reconnect. That means the server
+    # has explicitly requested the client give up trying to reconnect due to
+    # some error.
     #
     # The error code will be 'OK' if close() was called on the client.
     if options['reconnect'] and lastErrorCode not in [goog.net.BrowserChannel.Error.STOP, goog.net.BrowserChannel.Error.OK]
       #console.warn 'rc'
-      # If the session ID is unknown, that means the session has timed out. We can reconnect immediately.
+      # If the session ID is unknown, that means the session has timed out. We
+      # can reconnect immediately.
       time = if lastErrorCode is goog.net.BrowserChannel.Error.UNKNOWN_SESSION_ID then 0 else reconnectTime
 
       clearTimeout reconnectTimer
       reconnectTimer = setTimeout reconnect, time
 
-    # This whole method is surrounded in a try-catch block to silently discard
-    # exceptions. This happens after the reconnect timer is set so the callback
-    # can call close() to cancel reconnection.
-    try
-      fireCallback 'onclose', message, pendingMaps, undeliveredMaps
+    # This happens after the reconnect timer is set so the callback can call
+    # close() to cancel reconnection.
+    fireCallback 'onclose', false, message, pendingMaps, undeliveredMaps
 
     # make sure we don't reuse an old error message later
     lastErrorCode = null
@@ -242,7 +249,7 @@ BCSocket = (url, options) ->
       type: 'message'
       data: data
       
-    fireCallback 'onmessage', message
+    fireCallback 'onmessage', true, message
 
   # This reconnects if the current session is null.
   reconnect = ->
@@ -253,11 +260,11 @@ BCSocket = (url, options) ->
     throw new Error 'Reconnect() called from invalid state' if session
 
     setState BCSocket.CONNECTING
-    fireCallback 'onconnecting'
+    fireCallback 'onconnecting', true
 
     clearTimeout reconnectTimer
 
-    session = new goog.net.BrowserChannel options['appVersion'], lastSession?.getFirstTestResults()
+    self.session = session = new goog.net.BrowserChannel options['appVersion'], lastSession?.getFirstTestResults()
     session.setSupportsCrossDomainXhrs true if options['crossDomainXhr']
     session.setHandler handler
     session.setExtraHeaders extraHeaders if extraHeaders

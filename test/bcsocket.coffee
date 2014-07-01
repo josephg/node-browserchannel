@@ -271,6 +271,15 @@ suite 'bcsocket', ->
       assert.ok onErrorCalled
       done()
 
+  test 'passing a previous session will ghost that session', (done) ->
+    @socket1 = new BCSocket '/echo'
+    @socket1.onopen = =>
+      @socket2 = new BCSocket '/echo', prev:@socket1
+
+    @socket1.onclose = =>
+      @socket2.close()
+      done()
+
   suite 'The client keeps reconnecting', ->
     m = (base) -> (done) ->
       @socket = new BCSocket base, failFast: yes, reconnect: yes, reconnectTime: 300
