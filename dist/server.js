@@ -404,9 +404,9 @@ BCSession.prototype._receivedData = function(rid, data) {
                 session.close('Invalid JSON');
                 return;
               }
-              return session.emit('message', message);
+              return session.emit('message', makeMessage(message));
             } else if (map._S != null) {
-              return session.emit('message', map._S);
+              return session.emit('message', makeMessage(map._S));
             }
           };
         })(map));
@@ -420,13 +420,20 @@ BCSession.prototype._receivedData = function(rid, data) {
             if (session.state === 'closed') {
               return;
             }
-            return session.emit('message', message);
+            return session.emit('message', makeMessage(message));
           };
         })(map));
       }
     }
   });
 };
+
+function makeMessage(data){
+  return {
+    type: 'message',
+    data: data
+  }
+}
 
 BCSession.prototype._disconnectAt = function(rid) {
   var session;
