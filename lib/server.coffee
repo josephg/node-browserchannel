@@ -9,12 +9,11 @@
 # I've written this using the literate programming style to try it out. So, thats why
 # there's a million comments everywhere.
 #
-# The server is implemented as connect middleware. Its intended to be used like this:
+# The server is implemented an express middleware. Its intended to be used like this:
 #
 # ```
-# server = connect(
-#   browserChannel (client) -> client.send 'hi'
-# )
+# server = express();
+# server.use(browserChannel(function(client) { client.send('hi'); }));
 # ```
 
 # ## Dependancies, helper methods and constant data
@@ -64,6 +63,14 @@ defaultOptions =
   # You can specify the base URL which browserchannel connects to. Change this
   # if you want to scope browserchannel in part of your app, or if you want
   # /channel to mean something else, or whatever.
+  #
+  # I really want to remove this parameter - express 4.0's router is now good
+  # enough that you can just install the middleware anywhere using express. For
+  # example:
+  #   app.use('/mycoolpath', browserchannel({base:''}, ...));
+  #
+  # Unfortunately you have to force the base option to '' to do that (since it
+  # defaults to /channel otherwise). What a pain. TODO browserchannel 3.0
   base: '/channel'
 
   # We'll send keepalives every so often to make sure the http connection isn't
@@ -877,7 +884,7 @@ module.exports = browserChannel = (options, onConnect) ->
   base = base[... base.length - 1] if base.match /\/$/
   
   # Add a leading slash back on base
-  base = "/#{base}" unless base.match /^\//
+  base = "/#{base}" if base.length > 0 and !base.match /^\//
 
   # map from sessionId -> session
   sessions = {}

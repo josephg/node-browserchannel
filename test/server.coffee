@@ -13,7 +13,7 @@
 http = require 'http'
 assert = require 'assert'
 querystring = require 'querystring'
-connect = require 'connect'
+express = require 'express'
 
 timer = require 'timerstub'
 
@@ -38,7 +38,9 @@ createServer = (opts, method, callback) ->
   # The server is created using connect middleware. I'll simulate other middleware in
   # the stack by adding a second handler which responds with 200, 'Other middleware' to
   # any request.
-  app = connect bc, (req, res, next) ->
+  app = express()
+  app.use bc
+  app.use (req, res, next) ->
     # I might not actually need to specify the headers here... (If you don't, nodejs provides
     # some defaults).
     res.writeHead 200, 'OK', 'Content-Type': 'text/plain'

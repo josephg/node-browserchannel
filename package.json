@@ -16,13 +16,13 @@
   },
   "dependencies": {
     "hat": "*",
-    "connect": "~2",
     "request": "~2",
     "ascii-json": "~0.2"
   },
   "devDependencies": {
     "coffee-script": "~1.7",
     "timerstub": "*",
-    "mocha": "*"
+    "mocha": "*",
+    "express": "^4.6.1"
   }
 }

@@ -557,7 +557,7 @@ module.exports = browserChannel = function(options, onConnect) {
   if (base.match(/\/$/)) {
     base = base.slice(0, base.length - 1);
   }
-  if (!base.match(/^\//)) {
+  if (base.length > 0 && !base.match(/^\//)) {
     base = "/" + base;
   }
   sessions = {};

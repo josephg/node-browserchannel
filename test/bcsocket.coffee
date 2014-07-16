@@ -43,6 +43,8 @@ assert = require 'assert'
 if typeof window is 'undefined'
   try
     require('./runserver').listen 4321
+  catch e
+    console.warn e.stack
 
   bc = require '..'
   # If coffeescript declares a variable called 'BCSocket' here, it will shadow
