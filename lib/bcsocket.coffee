@@ -191,6 +191,14 @@ BCSocket = (url, options) ->
     # turn causes the connection to never reconnect. We'll eat the exceptions so
     # that doesn't happen.
     fireCallback 'onerror', false, message, errCode
+  
+  # When HTTP connection with session goes down because of network errors,
+  # handler uses this URL to make and HTTP request. If it succeeds, handler
+  # understands, that network is ok, it's just backend went down. 
+  # It if does not succeed, user has probably disconnected from network at all.
+  # the URL should point to a tiny image.
+  handler.getNetworkTestImageUri = (obj) ->
+     return options['testImageUri']
 
   reconnectTimer = null
 
