@@ -11,8 +11,6 @@ chat in gmail. Unlike socket.io, browserchannel guarantees:
 - Messages will never arrive on the server after a connection has closed
 - The mail will always get through on any browser that google talk works on, which is all of them.
 
-[![Build Status](https://secure.travis-ci.org/josephg/node-browserchannel.png)](http://travis-ci.org/josephg/node-browserchannel)
-
 node-browserchannel:
 
 - Is compatible with the closure library's browserchannel implementation
