@@ -9,7 +9,9 @@
     "url": "git://github.com/josephg/node-browserchannel.git"
   },
   "main": "index.js",
-  "engine": "node >= 0.6.2",
+  "engines": {
+    "node": "0.10.x"
+  },
   "scripts": {
     "test": "mocha",
     "prepublish": "make dist/server.js"
@@ -22,7 +24,7 @@
   "devDependencies": {
     "coffee-script": "~1.7",
     "timerstub": "*",
-    "mocha": "*",
+    "mocha": "~1.18",
     "express": "^4.6.1"
   }
 }
