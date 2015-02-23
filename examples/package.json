@@ -16,7 +16,7 @@
   },
   "dependencies": {
     "browserchannel": "../",
-    "connect": "1.7.2",
+    "connect": "~1",
     "coffee-script": "~1.7"
   }
 }
