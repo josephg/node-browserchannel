@@ -1,4 +1,4 @@
-browserChannel = require('..').server
+browserChannel = require('browserchannel').server
 connect = require 'connect'
 
 clients = []
