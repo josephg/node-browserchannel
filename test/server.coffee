@@ -48,7 +48,7 @@ createServer = (opts, method, callback) ->
 
   # Calling server.listen() without a port lets the OS pick a port for us. I don't
   # know why more testing frameworks don't do this by default.
-  server = http.createServer(app).listen ->
+  server = http.createServer(app).listen undefined, '127.0.0.1', ->
     # Obviously, we need to know the port to be able to make requests from the server.
     # The callee could check this itself using the server object, but it'll always need
     # to know it, so its easier pulling the port out here.
