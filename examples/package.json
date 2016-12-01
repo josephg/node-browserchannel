@@ -1,0 +1,23 @@
+{
+  "author": "Joseph Gentle <josephg@gmail.com> (http://josephg.com/)",
+  "name": "browserchannel-chatserver-demo",
+  "description": "Google BrowserChannel chatserver demo for NodeJS",
+  "homepage": "https://github.com/josephg/node-browserchannel",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/josephg/node-browserchannel.git"
+  },
+  "main": "chatserver.coffee",
+  "engines": {
+    "node": "0.10.x"
+  },
+  "scripts": {
+    "start": "coffee chatserver.coffee"
+  },
+  "dependencies": {
+    "browserchannel": "../",
+    "connect": "~1",
+    "coffee-script": "~1.7"
+  }
+}
+
