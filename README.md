@@ -192,7 +192,7 @@ session. The session is a nodejs event emitter with the following properties:
 connection. Any custom query parameters will be exposed on this object.
 - **state**: The current state of the connection. One of `'init'`, `'ok'` and
 `'closed'`. When the state is changed, the client will emit a *state changed*
-event with the old state and new state as event parameters.
+event with the new state and old state as event parameters.
 - **appVersion**: The client's reported application version, or null. You can
 use this to reject clients which are connecting from old versions of your
 client.
@@ -246,7 +246,7 @@ from the server, etc). Once a client has closed, it is gone forever. If the
 client reconnects, it will do so by establishing a new session.
 - **message (data)**: The server received a message from the client. The data
 object will be a javascript object.
-- **state changed (oldstate, newstate)**: The client's state changed. Clients
+- **state changed (newstate, oldstate)**: The client's state changed. Clients
 start in the 'init' state. They move to the 'ok' state when the session is
 established then go to the 'closed' state. If a client reconnects, they will
 create an entirely new session. init -> ok -> closed are the only three valid
