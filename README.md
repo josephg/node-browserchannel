@@ -1,8 +1,12 @@
-A [BrowserChannel](http://closure-library.googlecode.com/svn/trunk/closure/goog/net/browserchannel.js) server. [![Build Status](https://travis-ci.org/josephg/node-browserchannel.svg?branch=master)](https://travis-ci.org/josephg/node-browserchannel)
+# A [BrowserChannel](http://closure-library.googlecode.com/svn/trunk/closure/goog/net/browserchannel.js) server.
+
+[![Build Status](https://travis-ci.org/josephg/node-browserchannel.svg?branch=master)](https://travis-ci.org/josephg/node-browserchannel)
 
 **tldr;** Its like socket.io, but it scales better and it has fewer bugs. It
 just does long polling. It also doesn't support websockets and doesn't support
 cross-domain requests out of the box.
+
+> *Note:* [Websocket support](http://caniuse.com/#feat=websockets) is now reasonably universal. Strongly consider using raw websockets for new projects.
 
 BrowserChannel is google's version of [socket.io](http://socket.io) from when they first put
 chat in gmail. Unlike socket.io, browserchannel guarantees:
