@@ -22,7 +22,7 @@
     "ascii-json": "~0.2"
   },
   "devDependencies": {
-    "coffee-script": "~1.7",
+    "coffee-script": "~1.6",
     "timerstub": "*",
     "mocha": "~1.18",
     "express": "^4.6.1"
