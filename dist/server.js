@@ -547,7 +547,7 @@ module.exports = browserChannel = function(options, onConnect) {
     v = standardHeaders[h];
     (_base = options.headers)[h] || (_base[h] = v);
   }
-  if (options.cors) {
+  if (options.cors && typeof options.cors === 'string') {
     options.headers['Access-Control-Allow-Origin'] = options.cors;
   }
   if (options.corsAllowCredentials) {
@@ -606,6 +606,9 @@ module.exports = browserChannel = function(options, onConnect) {
         for (k in _ref2) {
           v = _ref2[k];
           headers[k] = v;
+        }
+        if (options.cors && typeof options.cors === 'function') {
+          headers['Access-Control-Allow-Origin'] = options.cors(req, res);
         }
         headers['X-Accept'] = 'application/json; application/x-www-form-urlencoded';
         res.writeHead(200, 'OK', headers);

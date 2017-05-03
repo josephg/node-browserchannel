@@ -9,9 +9,6 @@
     "url": "git://github.com/josephg/node-browserchannel.git"
   },
   "main": "index.js",
-  "engines": {
-    "node": "0.10.x"
-  },
   "scripts": {
     "test": "mocha",
     "prepublish": "make dist/server.js"

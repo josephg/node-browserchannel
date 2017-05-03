@@ -3,11 +3,11 @@
 #
 # You can get the closure library like this:
 #
-#     % svn co http://closure-library.googlecode.com/svn/trunk closure-library
+#     % git clone https://github.com/google/closure-library
 #
 # And download the closure compiler JAR here:
 #
-# http://code.google.com/p/closure-compiler/downloads/list
+# http://dl.google.com/closure-compiler/compiler-latest.zip
 #
 # I also compile with a patch to the closure library (which is in the root of
 # this repo). The patch fixes some cleanup issues in the closure library to
