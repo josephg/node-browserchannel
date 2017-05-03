@@ -97,6 +97,9 @@ defaultOptions =
   #
   # Setting cors:'X' is equivalent to adding
   #  {headers: {'Access-Control-Allow-Origin':X}}.
+  #
+  # You may also set cors to a function receiving (request, response)
+  # and returning desired header value.
   cors: null
 
   # Even with Access-Control-Allow-Origin enabled, browsers don't send their
@@ -185,7 +188,7 @@ messagingMethods = (options, query, res) ->
           # `JSON.stringify()`-ing it before passing it to the client. There
           # are XSS vulnerabilities otherwise.
           res.write "<script>try{document.domain=#{asciijson.stringify domain};}catch(e){}</script>\n"
-    
+
       write: (data) ->
         # The data is passed to `m()`, which is bound to *onTridentRpcMessage_* in the client.
         res.write "<script>try {parent.m(#{asciijson.stringify data})} catch(e) {}</script>\n"
@@ -239,7 +242,7 @@ sendError = (res, statusCode, message, options) ->
 #
 # The client sends data in a series of url-encoded maps. The data is encoded
 # like this:
-# 
+#
 # ```
 # count=2&ofs=0&req0_x=3&req0_y=10&req1_abc=def
 # ```
@@ -256,7 +259,7 @@ bufferPostData = (req, callback) ->
 # Next, we'll need to decode the incoming client data into an array of objects.
 #
 # The data could be in two different forms:
-# 
+#
 # - Classical browserchannel format, which is a bunch of string->string url-encoded maps
 # - A JSON object
 #
@@ -510,12 +513,12 @@ BCSession = (address, query, headers, options) ->
   @_queueArray ['c', @id, getHostPrefix(options), 8]
 
   # ### Maps
-  # 
+  #
   # The client sends maps to the server using POST requests. Its possible for the requests
   # to come in out of order, so sometimes we need to buffer up incoming maps and reorder them
   # before emitting them to the user.
   #
-  # Each map has an ID (which starts at 0 when the session is first created). 
+  # Each map has an ID (which starts at 0 when the session is first created).
 
   # We'll emit received data to the user immediately if they're in order, but if they're out of order
   # we'll use the little order helper above to order them. The order helper is instructed to not
@@ -586,7 +589,7 @@ BCSession::_setBackChannel = (res, query) ->
   @_backChannel = new BackChannel this, res, query
 
   # When the TCP connection underlying the backchannel request is closed, we'll stop using the
-  # backchannel and start the session timeout clock. The listener is kept so the event handler 
+  # backchannel and start the session timeout clock. The listener is kept so the event handler
   # removed once the backchannel is closed.
   res.connection.once 'close', @_backChannel.listener
 
@@ -876,13 +879,13 @@ module.exports = browserChannel = (options, onConnect) ->
 
   options.headers = {} unless options.headers
   options.headers[h] ||= v for h, v of standardHeaders
-  options.headers['Access-Control-Allow-Origin'] = options.cors if options.cors
+  options.headers['Access-Control-Allow-Origin'] = options.cors if options.cors and typeof options.cors == 'string'
   options.headers['Access-Control-Allow-Credentials'] = true if options.corsAllowCredentials
 
   # Strip off a trailing slash in base.
   base = options.base
   base = base[... base.length - 1] if base.match /\/$/
-  
+
   # Add a leading slash back on base
   base = "/#{base}" if base.length > 0 and !base.match /^\//
 
@@ -931,7 +934,7 @@ module.exports = browserChannel = (options, onConnect) ->
   middleware = (req, res, next) ->
     {query, pathname} = parse req.url, true
     #console.warn req.method, req.url
-    
+
     # If base is /foo, we don't match /foobar. (Currently no unit tests for this)
     return next() if pathname.substring(0, base.length + 1) != "#{base}/"
 
@@ -993,6 +996,8 @@ module.exports = browserChannel = (options, onConnect) ->
         # version, but that might conflict with future browserchannel versions.
         headers = {}
         headers[k] = v for k, v of options.headers
+        if options.cors and typeof options.cors == 'function'
+          headers['Access-Control-Allow-Origin'] = options.cors req, res
         headers['X-Accept'] = 'application/json; application/x-www-form-urlencoded'
 
         # This is a straight-up normal HTTP request like the forward channel requests.
@@ -1044,7 +1049,7 @@ module.exports = browserChannel = (options, onConnect) ->
       # ### Forward Channel
       if req.method == 'POST'
         if session == undefined
-          
+
           # The session is new! Make them a new session object and let the
           # application know.
           session = createSession req.connection.remoteAddress, query, req.headers

@@ -348,6 +348,14 @@ suite 'server', ->
         server.close()
         done()
 
+  test 'CORS headers can be set using a function', (done) ->
+    createServer cors: (-> 'something'), (->), (server, port) ->
+      http.get {path:'/channel/test?VER=8&MODE=init', host: 'localhost', port: port}, (response) ->
+        assert.strictEqual response.headers['access-control-allow-origin'], 'something'
+        buffer response
+        server.close()
+        done()
+
   test 'CORS header is set on the backchannel response', (done) ->
     server = port = null
 
@@ -361,7 +369,7 @@ suite 'server', ->
         req.abort()
         server.close()
         done()
-    
+
     createServer cors:'foo.com', corsAllowCredentials:true, sessionCreated, (_server, _port) ->
       [server, port] = [_server, _port]
 
