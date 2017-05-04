@@ -376,6 +376,26 @@ suite 'server', ->
       req = http.request {method:'POST', path:'/channel/bind?VER=8&RID=1000&t=1', host:'localhost', port:port}, (res) =>
       req.end 'count=0'
 
+  test 'CORS header is set on the backchannel response if set using a function', (done) ->
+    server = port = null
+
+    sessionCreated = (session) ->
+      # Make the backchannel flush as soon as its opened
+      session.send "flush"
+
+      req = http.get {path:"/channel/bind?VER=8&RID=rpc&SID=#{session.id}&AID=0&TYPE=xmlhttp&CI=0", host:'localhost', port:port}, (res) =>
+        assert.strictEqual res.headers['access-control-allow-origin'], 'foo.com'
+        assert.strictEqual res.headers['access-control-allow-credentials'], 'true'
+        req.abort()
+        server.close()
+        done()
+
+    createServer cors: (-> 'foo.com'), corsAllowCredentials:true, sessionCreated, (_server, _port) ->
+      [server, port] = [_server, _port]
+
+      req = http.request {method:'POST', path:'/channel/bind?VER=8&RID=1000&t=1', host:'localhost', port:port}, (res) =>
+      req.end 'count=0'
+
   # This test is just testing one of the error responses for the presence of
   # the CORS header. It doesn't test all of the ports, and doesn't test IE.
   # (I'm not actually sure if CORS headers are needed for IE stuff)
@@ -407,6 +427,33 @@ suite 'server', ->
 
       #@post "/channel/bind?VER=8&RID=1001&SID=junkyjunk&AID=0", 'count=0', testResponse(done)
 
+  suite 'CORS header is set in error responses if set using a function', ->
+    setup (callback) ->
+      createServer cors: (-> 'foo.com'), corsAllowCredentials:true, (->), (@corsServer, @corsPort) =>
+        callback()
+
+    teardown ->
+      @corsServer.close()
+
+    testResponse = (done, req, res) ->
+      assert.strictEqual res.statusCode, 400
+      assert.strictEqual res.headers['access-control-allow-origin'], 'foo.com'
+      assert.strictEqual res.headers['access-control-allow-credentials'], 'true'
+      buffer res, (data) ->
+        assert.ok data.indexOf('Unknown SID') > 0
+        req.abort()
+        done()
+
+    test 'backChannel', (done) ->
+      req = http.get {path:'/channel/bind?VER=8&RID=rpc&SID=madeup&AID=0&TYPE=xmlhttp&CI=0', host:'localhost', port:@corsPort}, (res) =>
+        testResponse done, req, res
+
+    test 'forwardChannel', (done) ->
+      req = http.request {method:'POST', path:'/channel/bind?VER=8&RID=1001&SID=junkyjunk&AID=0', host:'localhost', port:@corsPort}, (res) =>
+        testResponse done, req, res
+      req.end 'count=0'
+
+      #@post "/channel/bind?VER=8&RID=1001&SID=junkyjunk&AID=0", 'count=0', testResponse(done)
 
   test 'Additional headers can be specified in the options', (done) ->
     createServer headers:{'X-Foo':'bar'}, (->), (server, port) ->
