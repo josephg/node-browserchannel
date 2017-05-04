@@ -15,6 +15,7 @@
 # server = express();
 # server.use(browserChannel(function(client) { client.send('hi'); }));
 # ```
+#
 
 # ## Dependancies, helper methods and constant data
 
@@ -138,6 +139,30 @@ standardHeaders =
 
   # Gmail also sends this, though I'm not really sure what it does...
 #  'X-Xss-Protection': '1; mode=block'
+#
+class Options
+  constructor: (raw) ->
+    @rawHeaders = raw.headers
+    @corsAllowCredentials = raw.corsAllowCredentials
+    @cors = raw.cors
+    @sessionTimeoutInterval = raw.sessionTimeoutInterval
+    @base = raw.base
+    @keepAliveInterval = raw.keepAliveInterval
+    @hostPrefixes = raw.hostPrefixes
+
+  getHeaders: (req, res) ->
+    headers = {}
+    if @rawHeaders 
+      headers = @rawHeaders
+
+    headers[h] ||= v for h, v of standardHeaders
+    headers['Access-Control-Allow-Origin'] = @cors if @cors and typeof @cors == 'string'
+    headers['Access-Control-Allow-Credentials'] = true if @corsAllowCredentials
+
+    if @cors and typeof @cors == 'function'
+      headers['Access-Control-Allow-Origin'] = @cors req, res
+
+    headers
 
 # The one exception to that is requests destined for iframes. They need to have
 # content-type: text/html set for IE to process the juicy JS inside.
@@ -169,7 +194,7 @@ a9fe92fedacffff48092ee693af\n"
 # - The first *bind* connection a client makes. The server sends arrays there,
 #   but the connection is a POST and it returns immediately. So that request
 #   happens using XHR/Trident like regular forward channel requests.
-messagingMethods = (options, query, res) ->
+messagingMethods = (options, query, req, res) ->
   type = query.TYPE
   if type == 'html' # IE encoding using messaging via a slowly loading script file
     junkSent = false
@@ -221,20 +246,20 @@ messagingMethods = (options, query, res) ->
 
   else # Encoding for modern browsers
     # For normal XHR requests, we send data normally.
-    writeHead: -> res.writeHead 200, 'OK', options.headers
+    writeHead: -> res.writeHead 200, 'OK', options.getHeaders(req, res)
     write: (data) -> res.write "#{data.length}\n#{data}"
     writeRaw: (data) -> res.write data
     end: -> res.end()
     writeError: (statusCode, message) ->
-      res.writeHead statusCode, options.headers
+      res.writeHead statusCode, options.getHeaders(req, res)
       res.end message
 
 # For telling the client its done bad.
 #
 # It turns out google's server isn't particularly fussy about signalling errors
 # using the proper html RPC stuff, so this is useful for html connections too.
-sendError = (res, statusCode, message, options) ->
-  res.writeHead statusCode, message, options.headers
+sendError = (req, res, statusCode, message, options) ->
+  res.writeHead statusCode, message, options.getHeaders(req, res)
   res.end "<html><body><h1>#{message}</h1></body></html>"
   return
 
@@ -570,9 +595,9 @@ BCSession::_changeState = (newState) ->
   @state = newState
   @emit 'state changed', @state, oldState
 
-BackChannel = (session, res, query) ->
+BackChannel = (session, req, res, query) ->
   @res = res
-  @methods = messagingMethods session.options, query, res
+  @methods = messagingMethods session.options, query, req, res
   @chunk = query.CI == '0'
   @bytesSent = 0
   @listener = ->
@@ -583,10 +608,10 @@ BackChannel = (session, res, query) ->
 # I would like this method to be private or something, but it needs to be accessed from
 # the HTTP request code below. The _ at the start will hopefully make people think twice
 # before using it.
-BCSession::_setBackChannel = (res, query) ->
+BCSession::_setBackChannel = (req, res, query) ->
   @_clearBackChannel()
 
-  @_backChannel = new BackChannel this, res, query
+  @_backChannel = new BackChannel this, req, res, query
 
   # When the TCP connection underlying the backchannel request is closed, we'll stop using the
   # backchannel and start the session timeout clock. The listener is kept so the event handler
@@ -877,10 +902,7 @@ module.exports = browserChannel = (options, onConnect) ->
   options ||= {}
   options[option] ?= value for option, value of defaultOptions
 
-  options.headers = {} unless options.headers
-  options.headers[h] ||= v for h, v of standardHeaders
-  options.headers['Access-Control-Allow-Origin'] = options.cors if options.cors and typeof options.cors == 'string'
-  options.headers['Access-Control-Allow-Credentials'] = true if options.corsAllowCredentials
+  options = new Options(options)
 
   # Strip off a trailing slash in base.
   base = options.base
@@ -938,7 +960,7 @@ module.exports = browserChannel = (options, onConnect) ->
     # If base is /foo, we don't match /foobar. (Currently no unit tests for this)
     return next() if pathname.substring(0, base.length + 1) != "#{base}/"
 
-    {writeHead, write, writeRaw, end, writeError} = messagingMethods options, query, res
+    {writeHead, write, writeRaw, end, writeError} = messagingMethods options, query, req, res
 
     # # Serving the client
     #
@@ -970,7 +992,7 @@ module.exports = browserChannel = (options, onConnect) ->
     else if pathname is "#{base}/test"
       # This server only supports browserchannel protocol version **8**.
       # I have no idea if 400 is the right error here.
-      return sendError res, 400, 'Version 8 required', options unless query.VER is '8'
+      return sendError req, res, 400, 'Version 8 required', options unless query.VER is '8'
 
       #### Phase 1: Server info
       # The client is requests host prefixes. The server responds with an array of
@@ -994,10 +1016,7 @@ module.exports = browserChannel = (options, onConnect) ->
         #
         # It might be easier to put these headers in the response body or increment the
         # version, but that might conflict with future browserchannel versions.
-        headers = {}
-        headers[k] = v for k, v of options.headers
-        if options.cors and typeof options.cors == 'function'
-          headers['Access-Control-Allow-Origin'] = options.cors req, res
+        headers = options.getHeaders(req, res)
         headers['X-Accept'] = 'application/json; application/x-www-form-urlencoded'
 
         # This is a straight-up normal HTTP request like the forward channel requests.
@@ -1030,7 +1049,7 @@ module.exports = browserChannel = (options, onConnect) ->
     else if pathname == "#{base}/bind"
       # I'm copying the behaviour of unknown SIDs below. I don't know how the client
       # is supposed to detect this error, but, eh. The other choice is to `return writeError ...`
-      return sendError res, 400, 'Version 8 required', options unless query.VER is '8'
+      return sendError req, res, 400, 'Version 8 required', options unless query.VER is '8'
 
       # All browserchannel connections have an associated client object. A client
       # is created immediately if the connection is new.
@@ -1042,7 +1061,7 @@ module.exports = browserChannel = (options, onConnect) ->
         # For some reason, google replies with the same response on HTTP and HTML requests here.
         # I'll follow suit, though its a little weird. Maybe I should do the same with all client
         # errors?
-        return sendError res, 400, 'Unknown SID', options unless session
+        return sendError req, res, 400, 'Unknown SID', options unless session
 
       session._acknowledgeArrays query.AID if query.AID? and session
 
@@ -1059,7 +1078,7 @@ module.exports = browserChannel = (options, onConnect) ->
 
         dataError = (e) ->
           console.warn 'Error parsing forward channel', e.stack
-          return sendError res, 400, 'Bad data', options
+          return sendError req, res, 400, 'Bad data', options
 
         processData = (data) ->
           try
@@ -1073,21 +1092,21 @@ module.exports = browserChannel = (options, onConnect) ->
             # is a little bit special - it is always encoded using
             # length-prefixed json encoding and it is closed as soon as the
             # first chunk is sent.
-            res.writeHead 200, 'OK', options.headers
-            session._setBackChannel res, CI:1, TYPE:'xmlhttp', RID:'rpc'
+            res.writeHead 200, 'OK', options.getHeaders(req, res)
+            session._setBackChannel req, res, CI:1, TYPE:'xmlhttp', RID:'rpc'
             session.flush()
           else if session.state is 'closed'
             # If the onConnect handler called close() immediately,
             # session.state can be already closed at this point.  I'll assume
             # there was an authentication problem and treat this as a forbidden
             # connection attempt.
-            sendError res, 403, 'Forbidden', options
+            sendError req, res, 403, 'Forbidden', options
           else
             # On normal forward channels, we reply to the request by telling
             # the session if our backchannel is still live and telling it how
             # many unconfirmed arrays we have.
             response = JSON.stringify session._backChannelStatus()
-            res.writeHead 200, 'OK', options.headers
+            res.writeHead 200, 'OK', options.getHeaders(req, res)
             res.end "#{response.length}\n#{response}"
 
         if req.body
@@ -1106,27 +1125,27 @@ module.exports = browserChannel = (options, onConnect) ->
         # GET messages are usually backchannel requests (server->client).
         # Backchannel messages are handled by the session object.
         if query.TYPE in ['xmlhttp', 'html']
-          return sendError res, 400, 'Invalid SID', options if typeof query.SID != 'string' && query.SID.length < 5
-          return sendError res, 400, 'Expected RPC', options unless query.RID is 'rpc'
+          return sendError req, res, 400, 'Invalid SID', options if typeof query.SID != 'string' && query.SID.length < 5
+          return sendError req, res, 400, 'Expected RPC', options unless query.RID is 'rpc'
           writeHead()
-          session._setBackChannel res, query
+          session._setBackChannel req, res, query
         # The client can manually disconnect by making a GET request with TYPE='terminate'
         else if query.TYPE is 'terminate'
           # We don't send any data in the response to the disconnect message.
           #
           # The client implements this using an img= appended to the page.
           session?._disconnectAt query.RID
-          res.writeHead 200, 'OK', options.headers
+          res.writeHead 200, 'OK', options.getHeaders(req, res)
           res.end()
 
       else
-        res.writeHead 405, 'Method Not Allowed', options.headers
+        res.writeHead 405, 'Method Not Allowed', options.getHeaders(req, res)
         res.end "Method not allowed"
 
     else
       # We'll 404 the user instead of letting another handler take care of it.
       # Users shouldn't be using the specified URL prefix for anything else.
-      res.writeHead 404, 'Not Found', options.headers
+      res.writeHead 404, 'Not Found', options.getHeaders(req, res)
       res.end "Not found"
 
   middleware.close = ->
