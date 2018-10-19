@@ -811,7 +811,7 @@ function Qb(a) {
   return null;
 }
 f.log = function(a, b, c) {
-  if (a.value >= Qb(this).value) {
+  if (a.value >= Qb(this).value) { if(debug)
     for (fa(b) && (b = b()), a = this.mc(a, b, c), b = "log:" + a.qc, l.console && (l.console.timeStamp ? l.console.timeStamp(b) : l.console.markTimeline && l.console.markTimeline(b)), l.msWriteProfilerMark && l.msWriteProfilerMark(b), b = this;b;) {
       c = b;
       var d = a;
@@ -2654,6 +2654,7 @@ $ = function(a, b) {
   b || (b = {});
   m(b || "string" === typeof b) && (b = {});
   K = b.reconnectTime || 3E3;
+  debug=void 0===b.debug||b.debug;
   c = b.extraHeaders || null;
   d = b.extraParams || null;
   null !== b.affinity && (d || (d = {}), b.affinityParam || (b.affinityParam = "a"), this.affinity = b.affinity || sa(), d[b.affinityParam] = this.affinity);
